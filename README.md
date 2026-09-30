@@ -6,6 +6,7 @@ modelo do exemplo ES 2025 (`Planaveg_Categorias_Visualizacao.gpkg`).
 ## Execução (env `geo`, a partir da raiz deste repo)
 
 ```
+python 0_inventario_fontes_visualizacao.py  # diagnóstico das fontes (opcional)
 python 1_checar_fontes.py                    # confere fontes, camadas e filtros
 python 2_fragmentar_e_atribuir.py --uf ES    # teste
 python 3_validar.py --uf ES
@@ -39,3 +40,16 @@ Saídas em `Computo_Planaveg_2026\Visualizacao\` (`_por_uf`, `_logs` e o gpkg fi
 - Limitação conhecida: flags APP/RL/AUR só existem onde há VS (regra do cômputo
   para os CARs); classes com polígono inteiro (Recooperar, ORR) não recebem essas
   flags fora da VS.
+
+## Desempenho
+
+- Máscaras grandes (ex.: CAR dissolvido por UF) são recortadas pela janela da UF
+  e subdivididas em quadrantes (> 2.000 vértices) antes dos cruzamentos.
+- `--bloco-km N` processa a UF em blocos (menos memória, mais lento); a UF FORA
+  usa blocos de 200 km automaticamente.
+- O script 2 pula UFs já processadas (use `--sobrescrever` para refazer).
+
+## Validação ES (30/09/2026)
+
+Conservação de área OK, Albers vs geodésica ≤ 0,002%, 0 geometrias inválidas,
+100% da área de cada classe com a flag própria. vs22q = vs2224q no ES (sem VS 2024).

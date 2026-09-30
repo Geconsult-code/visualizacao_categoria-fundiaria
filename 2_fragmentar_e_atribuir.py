@@ -89,6 +89,7 @@ def processar(ver, uf, bloco_km, sobrescrever):
     resultado = []
     lista = blocos(base, bloco_km or (200 if uf == "FORA" else 0))
     for k, sub in enumerate(lista, 1):
+        janela = tuple(sub.total_bounds + np.array([-100, -100, 100, 100]))
         bbox = vc.bbox_geo(sub.total_bounds)
         pref = f"bloco {k}/{len(lista)}: " if len(lista) > 1 else ""
         sub = vc.atribuir_categorias(sub, carregar_municipios(bbox),
@@ -97,7 +98,7 @@ def processar(ver, uf, bloco_km, sobrescrever):
                                      list(vc.BACIAS_CAMPOS.values()))
         rel(f"{pref}municípios e bacias: {len(sub):,} peças")
         for f in vc.FONTES:
-            mascara = vc.carregar_mascara(f, ver, bbox)
+            mascara = vc.carregar_mascara(f, ver, bbox, janela)
             sub = vc.dividir_por_mascara(sub, mascara, f["campo"], f["valor"])
             n_flag = int((sub[f["campo"]] != "").sum())
             rel(f"{pref}{f['campo']}: {len(mascara):,} polígonos na janela, "

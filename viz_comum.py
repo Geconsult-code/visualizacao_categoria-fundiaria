@@ -245,12 +245,44 @@ def recorte(geoms, bounds):
                         dtype=object)
 
 
+MAX_VERTICES = 2000  # partes de máscara maiores que isso são subdivididas
+
+
+def subdividir(geoms, janela=None, max_vert=MAX_VERTICES):
+    """Recorta as partes pela janela (se dada) e subdivide recursivamente em
+    quadrantes as que têm mais de max_vert vértices. Não altera a união da
+    máscara; só a torna barata para recortes locais."""
+    geoms = np.asarray(geoms, dtype=object)
+    if janela is not None:
+        fora = ~shapely.intersects(geoms, shapely.box(*janela))
+        geoms = geoms[~fora]
+        grandes = shapely.get_num_coordinates(geoms) > max_vert
+        if grandes.any():
+            geoms = np.concatenate([geoms[~grandes], recorte(geoms[grandes], janela)])
+        geoms, _ = _explodir_poligonos(_validar(geoms))
+    prontas, fila = [], [geoms]
+    while fila:
+        g = fila.pop()
+        if len(g) == 0:
+            continue
+        grandes = shapely.get_num_coordinates(g) > max_vert
+        prontas.append(g[~grandes])
+        for geo in g[grandes]:
+            x0, y0, x1, y1 = shapely.bounds(geo)
+            xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
+            quads = [(x0, y0, xm, ym), (xm, y0, x1, ym), (x0, ym, xm, y1), (xm, ym, x1, y1)]
+            partes = np.concatenate([recorte([geo], q) for q in quads])
+            partes, _ = _explodir_poligonos(_validar(partes))
+            fila.append(partes)
+    return np.concatenate(prontas) if prontas else np.empty(0, dtype=object)
+
+
 def ler_camada(arquivo, camada, where=None, bbox=None, columns=None):
     return pyogrio.read_dataframe(arquivo, layer=camada, where=where, bbox=bbox,
                                   columns=columns)
 
 
-def carregar_mascara(fonte, ver, bbox):
+def carregar_mascara(fonte, ver, bbox, janela_albers=None):
     """Polígonos da fonte na janela bbox (EPSG:4674), em Albers, como array shapely."""
     if not fonte["arquivo"].exists():
         raise FileNotFoundError(fonte["arquivo"])
@@ -261,7 +293,7 @@ def carregar_mascara(fonte, ver, bbox):
     if gdf.crs is None:
         gdf = gdf.set_crs(CRS_GEO)
     gdf = poligonos(gdf.to_crs(ALBERS))
-    return np.asarray(gdf.geometry.values, dtype=object)
+    return subdividir(np.asarray(gdf.geometry.values, dtype=object), janela_albers)
 
 
 # ----------------------------------------------------------------------------
