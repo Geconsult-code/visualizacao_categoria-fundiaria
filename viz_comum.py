@@ -283,6 +283,19 @@ def subdividir(geoms, janela=None, max_vert=MAX_VERTICES):
     return np.concatenate(prontas) if prontas else np.empty(0, dtype=object)
 
 
+def subdividir_gdf(gdf, janela=None, max_vert=MAX_VERTICES):
+    """subdividir() para camadas com atributos (municípios, bacias)."""
+    if gdf.empty:
+        return gdf
+    linhas, geoms = [], []
+    for i, g in enumerate(gdf.geometry.values):
+        partes = subdividir([g], janela, max_vert)
+        linhas += [i] * len(partes)
+        geoms += list(partes)
+    out = gdf.iloc[linhas].copy()
+    return out.set_geometry(gpd.GeoSeries(geoms, index=out.index, crs=gdf.crs)).reset_index(drop=True)
+
+
 def ler_camada(arquivo, camada, where=None, bbox=None, columns=None):
     return pyogrio.read_dataframe(arquivo, layer=camada, where=where, bbox=bbox,
                                   columns=columns)

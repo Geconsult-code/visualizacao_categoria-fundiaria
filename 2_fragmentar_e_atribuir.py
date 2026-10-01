@@ -40,23 +40,23 @@ def ler_total(ver, uf):
     return vc.poligonos(gdf.to_crs(vc.ALBERS)), area_geod
 
 
-def carregar_municipios(bbox):
+def carregar_municipios(bbox, janela=None):
     camada = vc.camada_de(vc.MUNICIPIOS_ARQ)
     nome = vc.campo_real(vc.MUNICIPIOS_ARQ, camada, vc.MUN_NOME_CANDIDATOS)
     cod = vc.campo_real(vc.MUNICIPIOS_ARQ, camada, vc.MUN_COD_CANDIDATOS)
     gdf = vc.ler_camada(vc.MUNICIPIOS_ARQ, camada, bbox=bbox, columns=[nome, cod])
     gdf = gdf.rename(columns={nome: "Municipio", cod: "cod_municipio"})
     gdf[["Municipio", "cod_municipio"]] = gdf[["Municipio", "cod_municipio"]].astype(str)
-    return vc.poligonos(gdf.to_crs(vc.ALBERS))
+    return vc.subdividir_gdf(vc.poligonos(gdf.to_crs(vc.ALBERS)), janela)
 
 
-def carregar_bacias(bbox):
+def carregar_bacias(bbox, janela=None):
     gdf = vc.ler_camada(vc.BACIAS_ARQ, vc.BACIAS_CAMADA, bbox=bbox,
                         columns=list(vc.BACIAS_CAMPOS))
     gdf = gdf.rename(columns=vc.BACIAS_CAMPOS)
     for c in vc.BACIAS_CAMPOS.values():
         gdf[c] = gdf[c].fillna("").astype(str)
-    return vc.poligonos(gdf.to_crs(vc.ALBERS))
+    return vc.subdividir_gdf(vc.poligonos(gdf.to_crs(vc.ALBERS)), janela)
 
 
 def blocos(base, bloco_km):
@@ -92,9 +92,9 @@ def processar(ver, uf, bloco_km, sobrescrever):
         janela = tuple(sub.total_bounds + np.array([-100, -100, 100, 100]))
         bbox = vc.bbox_geo(sub.total_bounds)
         pref = f"bloco {k}/{len(lista)}: " if len(lista) > 1 else ""
-        sub = vc.atribuir_categorias(sub, carregar_municipios(bbox),
+        sub = vc.atribuir_categorias(sub, carregar_municipios(bbox, janela),
                                      ["Municipio", "cod_municipio"])
-        sub = vc.atribuir_categorias(sub, carregar_bacias(bbox),
+        sub = vc.atribuir_categorias(sub, carregar_bacias(bbox, janela),
                                      list(vc.BACIAS_CAMPOS.values()))
         rel(f"{pref}municípios e bacias: {len(sub):,} peças")
         for f in vc.FONTES:
