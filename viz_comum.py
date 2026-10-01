@@ -217,7 +217,13 @@ def _validar(geom):
 def poligonos(gdf):
     """Explode para Polygon simples, válido, 2D e com área > 0."""
     gdf = gdf[~(gdf.geometry.isna() | gdf.geometry.is_empty)]
-    partes, idx = _explodir_poligonos(_validar(gdf.geometry.values))
+    # explode ANTES de validar: checar/corrigir milhões de partes pequenas é
+    # muito mais rápido que validar um multipolígono gigante inteiro
+    geom = np.asarray(shapely.force_2d(np.asarray(gdf.geometry.values, dtype=object)),
+                      dtype=object)
+    partes, idx = _explodir_poligonos(geom)
+    partes, idx2 = _explodir_poligonos(_validar(partes))
+    idx = idx[idx2]
     out = gdf.iloc[idx].copy()
     out = out.set_geometry(gpd.GeoSeries(partes, index=out.index, crs=gdf.crs))
     return out.reset_index(drop=True)
