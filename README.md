@@ -48,6 +48,32 @@ fragmento se sobrepõe à fonte, ou texto vazio quando não se sobrepõe. Exempl
 filtro: `"Sobreposicao" = 'PROJCAR'`, `"UF" = 'MT' AND "TI" <> ''`,
 `"APP_Nao_Analisado" <> '' AND "Bacia_meso" = '...'`.
 
+## Dados: restaurar o backup
+
+Os dados de entrada e os intermediários que este repositório lê estão no backup do projeto
+(`F:\BKP_PLANAVEG`, organizado e documentado no repositório
+[`backup_planaveg_2026`](https://github.com/Geconsult-code/backup_planaveg_2026)). Para rodar
+os scripts em outro computador ou em outra pasta, restaure só o que este repositório usa
+(cerca de 20 GB descompactados) e aponte os scripts para a pasta restaurada:
+
+```powershell
+git clone https://github.com/Geconsult-code/backup_planaveg_2026
+cd backup_planaveg_2026
+# simulação: mostra o volume por pasta e o espaço necessário
+python restaurar_backup.py --backup F:\BKP_PLANAVEG --destino D:\PLANAVEG_DADOS --repo visualizacao
+# restauração (pode ser interrompida e retomada)
+python restaurar_backup.py --backup F:\BKP_PLANAVEG --destino D:\PLANAVEG_DADOS --repo visualizacao --executar
+# uma vez só; abra um terminal novo depois
+setx PLANAVEG_GEO "D:\PLANAVEG_DADOS"
+```
+
+O `viz_comum.py` lê `PLANAVEG_GEO`; nenhum script precisa ser editado. A restauração inclui o
+`Planaveg_2026_Total` do cômputo, que é a entrada desta etapa.
+
+Sem a variável, os scripts usam a pasta original no Dropbox (`GEODATABASE\GEOPACKAGE`), que hoje
+guarda só uma cópia reduzida dos dados. Detalhes, opções e o inventário completo do backup
+(`_manifesto_backup.csv`) estão no README do `backup_planaveg_2026`.
+
 ## Requisitos
 
 - Ambiente conda `geo` (conda-forge): Python ≥ 3.10, GeoPandas ≥ 1.0,
