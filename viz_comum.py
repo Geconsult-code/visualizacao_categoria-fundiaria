@@ -511,9 +511,10 @@ def forcar_flags_da_classe(gdf):
     cont = {}
 
     def marca(sel, campo):
-        n = int((sel & (gdf[campo].to_numpy() == "")).sum())
-        if n:
-            cont[(campo, int(tier[sel][0]) if sel.any() else -1)] = n
+        falta = sel & (gdf[campo].to_numpy() == "")
+        if falta.any():
+            area = float(shapely.area(np.asarray(gdf.geometry.values, dtype=object)[falta]).sum() / 1e4)
+            cont[(campo, int(tier[sel][0]))] = (int(falta.sum()), area)
         _marcar(gdf, sel, campo)
 
     marca(tier == 3, "CAR_regularizacao")

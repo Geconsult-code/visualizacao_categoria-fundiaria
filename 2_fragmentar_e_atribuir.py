@@ -91,8 +91,9 @@ def aplicar_matriz(sub, ver, pref, rel):
     """Flags próprias da classe e imputação pela fonte mais próxima."""
     reg = []
     sub, cont = vc.forcar_flags_da_classe(sub)
-    for (campo, tier), n in cont.items():
-        reg.append(dict(regra=f"flag própria da classe {tier}", campo=campo, n_pecas=n))
+    for (campo, tier), (n, area) in cont.items():
+        reg.append(dict(regra=f"flag própria da classe {tier}", campo=campo, n_pecas=n,
+                        area_ha=area))
     grupos = vc.grupos_de_imputacao(sub)
     for nome, sel, campos in grupos:
         df = vc.imputar_mais_proximo(sub, sel, campos, ver)

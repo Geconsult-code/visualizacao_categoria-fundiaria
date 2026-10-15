@@ -91,6 +91,13 @@ python restaurar_backup.py --backup F:\BKP_PLANAVEG --destino D:\PLANAVEG_DADOS 
 setx PLANAVEG_GEO "D:\PLANAVEG_DADOS"
 ```
 
+Para apontar só o cômputo para outra pasta, apenas no terminal atual (PowerShell; no `cmd` use
+`set PLANAVEG_C26=...`):
+
+```powershell
+$env:PLANAVEG_C26 = "D:\PLANAVEG_TEMP\Computo_Planaveg_2026"
+```
+
 O `viz_comum.py` lê `PLANAVEG_GEO`; nenhum script precisa ser editado. Se o cômputo foi
 regerado em outra pasta, `PLANAVEG_C26` aponta para a sua `Computo_Planaveg_2026` (a saída
 `Visualizacao` vai para lá); o CAR dissolvido por UF é procurado em `PLANAVEG_GEO` e, se não
