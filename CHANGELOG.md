@@ -11,9 +11,10 @@
 - Variável `PLANAVEG_C26` para usar um cômputo regerado em outra pasta.
 
 ### Alterado
-- `Manguezal` passa de subcategoria de PROJ para subcategoria de UC.
-- `UC` passa a ser o tema (APA, RPPN, demais UCs ou manguezal); APA e RPPN
-  continuam como colunas de detalhe.
+- `Manguezal` deixa de ser subcategoria de PROJ e passa a tema isolado
+  (token `MANG` na Sobreposicao).
+- `UC` passa a ser o tema (APA, RPPN ou demais UCs); APA e RPPN continuam
+  como colunas de detalhe.
 - `CAR` inclui `CAR_regularizacao` e APP/RL/AUR; APP/RL/AUR_<situação>
   marca `CAR_<situação>`.
 - Flags próprias de cada classe garantidas; subcategoria ou esfera ambígua

@@ -40,9 +40,10 @@ exemplo 2025), geometria 2D.
 | CAR | `CAR` (tema), `CAR_Habilitado`, `CAR_Analisado`, `CAR_Nao_Analisado`, `CAR_regularizacao` (situação) |
 | APP / RL / AUR | `APP_Habilitado`, `APP_Analisado`, `APP_Nao_Analisado`, `RL_*`, `AUR_*` (mesmas três categorias) |
 | Projetos | `PROJ` (tema), `Licenciamento_Ambiental`, `Reparacao_Danos`, `Area_Embargada`, `Outras_Areas`, `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR` (subcategorias) |
-| Unidades de conservação | `Manguezal`, `APA`, `RPPN` (subcategorias e detalhe), `UC` (tema), `UC_federal`, `UC_estadual`, `UC_municipal` (esfera) |
+| Manguezal | `Manguezal` (tema isolado, Pró-Manguezal) |
+| Unidades de conservação | `APA`, `RPPN` (subcategorias e detalhe), `UC` (tema), `UC_federal`, `UC_estadual`, `UC_municipal` (esfera) |
 | Territórios | `TI`, `AS_`, `QL` |
-| Síntese | `Sobreposicao` (concatenação de PROJ, CAR, APA, RPPN, UC, TI, AS, QL; o token UC só aparece para UCs que não são APA/RPPN, ou manguezal fora delas) |
+| Síntese | `Sobreposicao` (concatenação de PROJ, CAR, APA, RPPN, UC, MANG, TI, AS, QL; o token UC só aparece para UCs que não são APA/RPPN) |
 
 Cada flag contém o rótulo (ex.: `"TI"`, `"Habilitado"`, `"Federal"`) quando o
 fragmento se sobrepõe à fonte, ou texto vazio quando não se sobrepõe. Exemplos de
@@ -58,12 +59,12 @@ violações em todas):
 |---|---|
 | M1 | Hierarquia e localização sempre preenchidas; município e bacia vazios (litoral, `FORA`) recebem o polígono mais próximo |
 | M2 | `categoria` preenchida só nas classes do CAR (APP, AUR, RL) |
-| M3 | Toda peça tem pelo menos um tema: `CAR`, `PROJ`, `UC` ou `TI` |
+| M3 | Toda peça tem pelo menos um tema: `CAR`, `PROJ`, `UC`, `TI` ou `Manguezal` |
 | M4 | `CAR` exige situação: `CAR_Habilitado`, `CAR_Analisado`, `CAR_Nao_Analisado` ou `CAR_regularizacao` |
 | M5 | `APP/RL/AUR_<situação>` implica `CAR_<situação>` (a sobreposição real de situações do SICAR é mantida) |
 | M6 | `PROJ` exige subcategoria (Recooperar, `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR`) |
-| M7 | `UC` exige esfera; `APA`, `RPPN` e `Manguezal` implicam `UC` |
-| M8 | Flags próprias da classe: 1 Recooperar; 3 `CAR_regularizacao`; 4 PANGIA/GEF/Restauração; 5 `ORR`; 6 `TI`; 7 `UC` + esfera; 8 `Manguezal` + `UC` + esfera; 9-11 `<tema>_<situação>` + `CAR_<situação>` |
+| M7 | `UC` exige esfera; `APA` e `RPPN` implicam `UC` |
+| M8 | Flags próprias da classe: 1 Recooperar; 3 `CAR_regularizacao`; 4 PANGIA/GEF/Restauração; 5 `ORR`; 6 `TI`; 7 `UC` + esfera; 8 `Manguezal`; 9-11 `<tema>_<situação>` + `CAR_<situação>` |
 | M9 | `Sobreposicao` sempre preenchida |
 
 Quando a peça está numa classe mas escapou do identity (borda, diferença de precisão), a flag

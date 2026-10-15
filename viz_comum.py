@@ -14,14 +14,15 @@ Regras aprovadas (29/09/2026):
 Regras de preenchimento (matriz de validação, 15/10/2026):
 - Colunas de hierarquia e localização sempre preenchidas (categoria só nas
   classes do CAR). Município/bacia vazios recebem o polígono mais próximo.
-- Toda peça tem pelo menos um tema: CAR, PROJ, UC ou TI.
+- Toda peça tem pelo menos um tema: CAR, PROJ, UC, TI ou Manguezal.
 - CAR exige situação (CAR_Habilitado, CAR_Analisado, CAR_Nao_Analisado ou
   CAR_regularizacao); APP/RL/AUR_<situação> implica CAR_<situação>.
 - PROJ exige subcategoria: Licenciamento_Ambiental, Reparacao_Danos,
   Area_Embargada, Outras_Areas, Embargo_PANGIA, GEF_Terrestre,
   Restauracao_Ecologica ou ORR.
-- UC = APA, RPPN, demais UCs do CNUC ou Manguezal; UC exige esfera
+- UC = APA, RPPN ou demais UCs do CNUC; UC exige esfera
   (UC_federal, UC_estadual ou UC_municipal).
+- Manguezal é tema isolado (não é PROJ nem UC); token MANG na Sobreposicao.
 - Cada classe recebe as flags próprias (ver forcar_flags_da_classe); onde a
   subcategoria é ambígua (classes 1, 4 e 7, esfera da UC) vale a fonte mais
   próxima (ver imputar_mais_proximo), com registro em _logs.
@@ -171,12 +172,13 @@ RECOOPERAR = ["Licenciamento_Ambiental", "Reparacao_Danos", "Area_Embargada", "O
 OUTROS_PROJETOS = ["Embargo_PANGIA", "GEF_Terrestre", "Restauracao_Ecologica"]
 PROJ_COMPONENTES = RECOOPERAR + OUTROS_PROJETOS + ["ORR"]
 UC_TIPOS = ["APA", "RPPN", "UC_outras"]
-UC_COMPONENTES = UC_TIPOS + ["Manguezal"]
+UC_COMPONENTES = UC_TIPOS
 UC_ESFERAS = ["UC_federal", "UC_estadual", "UC_municipal"]
-# Mesma ordem de 2025 no campo Sobreposicao (o token UC é calculado à parte)
+# Mesma ordem de 2025 no campo Sobreposicao (o token UC é calculado à parte);
+# MANG é novo em 2026 (manguezal como tema isolado)
 TOKENS_SOBREPOSICAO = [("PROJ", "PROJ"), ("CAR", "CAR"), ("APA", "APA"),
-                       ("RPPN", "RPPN"), ("_UC_token", "UC"), ("TI", "TI"),
-                       ("AS_", "AS"), ("QL", "QL")]
+                       ("RPPN", "RPPN"), ("_UC_token", "UC"), ("Manguezal", "MANG"),
+                       ("TI", "TI"), ("AS_", "AS"), ("QL", "QL")]
 
 CAMPOS_HIER = ["hierarquia_planaveg", "tier", "categoria"]
 CAMPOS_LOCAL = ["UF", "Bioma", "Municipio", "cod_municipio",
@@ -610,9 +612,8 @@ def derivar_campos(gdf):
     gdf["CAR"] = np.where(tem(CAR_SITUACOES + TEMAS_CAR), "CAR", "")
     gdf["PROJ"] = np.where(tem(PROJ_COMPONENTES), "PROJ", "")
     gdf["UC"] = np.where(tem(UC_COMPONENTES), "UC", "")
-    # token UC: demais UCs, ou manguezal fora de APA/RPPN (evita "APAUC" redundante)
-    gdf["_UC_token"] = np.where(tem(["UC_outras"])
-                                | (tem(["Manguezal"]) & ~tem(["APA", "RPPN"])), "UC", "")
+    # token UC só para as demais UCs (APA e RPPN já têm token próprio)
+    gdf["_UC_token"] = np.where(tem(["UC_outras"]), "UC", "")
     sob = pd.Series("", index=gdf.index)
     for campo, token in TOKENS_SOBREPOSICAO:
         sob = sob + np.where(gdf[campo] != "", token, "")

@@ -34,14 +34,14 @@ MATRIZ = [
            "computo, Area_ha, UF, Bioma, Municipio, cod_municipio, Bacia, Bacia_meso, "
            "Regiao_Hidrografica)"),
     ("M2", "categoria preenchida nas classes 9-11 (APP/AUR/RL) e vazia nas demais"),
-    ("M3", "Pelo menos um tema: CAR, PROJ, UC ou TI"),
+    ("M3", "Pelo menos um tema: CAR, PROJ, UC, TI ou Manguezal"),
     ("M4", "CAR exige situação: CAR_Habilitado, CAR_Analisado, CAR_Nao_Analisado ou "
            "CAR_regularizacao; e situação/APP/RL/AUR implica CAR"),
     ("M5", "APP/RL/AUR_<situação> implica CAR_<situação>"),
     ("M6", "PROJ exige subcategoria (Recooperar, Embargo_PANGIA, GEF_Terrestre, "
            "Restauracao_Ecologica, ORR) e subcategoria implica PROJ"),
-    ("M7", "UC exige esfera (UC_federal, UC_estadual, UC_municipal); APA, RPPN e "
-           "Manguezal implicam UC"),
+    ("M7", "UC exige esfera (UC_federal, UC_estadual, UC_municipal); APA e RPPN "
+           "implicam UC"),
     ("M8", "Flags próprias da classe (ver flags_proprias)"),
     ("M9", "Sobreposicao preenchida"),
 ]
@@ -57,7 +57,7 @@ def flags_proprias(hier, tier, categoria):
         return [[f"{tema}_{suf}"], [f"CAR_{suf}"], ["CAR"]]
     return {1: [RECOOPERAR, ["PROJ"]], 3: [["CAR_regularizacao"], ["CAR"]],
             4: [vc.OUTROS_PROJETOS, ["PROJ"]], 5: [["ORR"], ["PROJ"]], 6: [["TI"]],
-            7: [["UC"], vc.UC_ESFERAS], 8: [["Manguezal"], ["UC"], vc.UC_ESFERAS]}.get(t, [])
+            7: [["UC"], vc.UC_ESFERAS], 8: [["Manguezal"]]}.get(t, [])
 
 
 def matriz(gdf):
@@ -72,7 +72,7 @@ def matriz(gdf):
                ).any(axis=1) | tier.isna() | gdf["Area_ha"].isna() | (
                    gdf["computo"].isna() if gdf["computo"].notna().any() else False)
     v["M2"] = (car_classe & vazio("categoria")) | (~car_classe & ~vazio("categoria"))
-    v["M3"] = ~tem(["CAR", "PROJ", "UC", "TI"])
+    v["M3"] = ~tem(["CAR", "PROJ", "UC", "TI", "Manguezal"])
     v["M4"] = (~vazio("CAR") & ~tem(vc.CAR_SITUACOES)) | (
         vazio("CAR") & tem(vc.CAR_SITUACOES + vc.TEMAS_CAR))
     m5 = pd.Series(False, index=gdf.index)
@@ -82,7 +82,7 @@ def matriz(gdf):
     v["M6"] = (~vazio("PROJ") & ~tem(vc.PROJ_COMPONENTES)) | (
         vazio("PROJ") & tem(vc.PROJ_COMPONENTES))
     v["M7"] = (~vazio("UC") & ~tem(vc.UC_ESFERAS)) | (
-        vazio("UC") & tem(["APA", "RPPN", "Manguezal"]))
+        vazio("UC") & tem(["APA", "RPPN"]))
     m8 = pd.Series(False, index=gdf.index)
     for (h, t, c), idx in gdf.groupby(["hierarquia_planaveg", "tier", "categoria"]).groups.items():
         for grupo in flags_proprias(h, t, c):
