@@ -1,10 +1,11 @@
-"""
+r"""
 1_checar_fontes.py - Atributos de visualização do cômputo Planaveg 2026
 Etapa 1: confere se todas as fontes existem, se as camadas e os filtros
 (where) funcionam e quantas feições cada flag vai usar. Só lê; não grava
 nada além do relatório CSV em Visualizacao/_logs.
 
 Uso (env geo):  python 1_checar_fontes.py
+O cômputo pode vir de outra pasta: set PLANAVEG_C26=D:\PLANAVEG_TEMP\Computo_Planaveg_2026
 """
 import pandas as pd
 import pyogrio
@@ -20,6 +21,7 @@ def contar(arquivo, camada, where=None):
 def main():
     vc.LOGS.mkdir(parents=True, exist_ok=True)
     linhas, problemas = [], 0
+    print(f"PLANAVEG_GEO: {vc.GEO}\nPLANAVEG_C26: {vc.C26}\nSaída:        {vc.SAIDA}\n")
 
     print("== Hierarquia final (Total)")
     for ver in vc.VERSOES:

@@ -37,16 +37,39 @@ exemplo 2025), geometria 2D.
 |---|---|
 | Classe do cômputo | `hierarquia_planaveg`, `tier`, `categoria`, `computo` (total nacional da classe, ha), `Area_ha` (área do fragmento, ha) |
 | Localização | `UF`, `Bioma`, `Municipio`, `cod_municipio`, `Bacia` (micro RH), `Bacia_meso`, `Regiao_Hidrografica` (macro RH) |
-| CAR | `CAR`, `CAR_Habilitado`, `CAR_Analisado`, `CAR_Nao_Analisado`, `CAR_regularizacao` |
+| CAR | `CAR` (tema), `CAR_Habilitado`, `CAR_Analisado`, `CAR_Nao_Analisado`, `CAR_regularizacao` (situação) |
 | APP / RL / AUR | `APP_Habilitado`, `APP_Analisado`, `APP_Nao_Analisado`, `RL_*`, `AUR_*` (mesmas três categorias) |
-| Projetos e instrumentos | `PROJ`, `Licenciamento_Ambiental`, `Reparacao_Danos`, `Area_Embargada`, `Outras_Areas`, `Embargo_PANGIA`, `ORR`, `Manguezal` |
-| Áreas protegidas e territórios | `APA`, `RPPN`, `UC`, `UC_federal`, `UC_estadual`, `UC_municipal`, `TI`, `AS_`, `QL` |
-| Síntese | `Sobreposicao` (concatenação de PROJ, CAR, APA, RPPN, UC, TI, AS, QL) |
+| Projetos | `PROJ` (tema), `Licenciamento_Ambiental`, `Reparacao_Danos`, `Area_Embargada`, `Outras_Areas`, `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR` (subcategorias) |
+| Unidades de conservação | `Manguezal`, `APA`, `RPPN` (subcategorias e detalhe), `UC` (tema), `UC_federal`, `UC_estadual`, `UC_municipal` (esfera) |
+| Territórios | `TI`, `AS_`, `QL` |
+| Síntese | `Sobreposicao` (concatenação de PROJ, CAR, APA, RPPN, UC, TI, AS, QL; o token UC só aparece para UCs que não são APA/RPPN, ou manguezal fora delas) |
 
 Cada flag contém o rótulo (ex.: `"TI"`, `"Habilitado"`, `"Federal"`) quando o
 fragmento se sobrepõe à fonte, ou texto vazio quando não se sobrepõe. Exemplos de
 filtro: `"Sobreposicao" = 'PROJCAR'`, `"UF" = 'MT' AND "TI" <> ''`,
 `"APP_Nao_Analisado" <> '' AND "Bacia_meso" = '...'`.
+
+### Matriz de preenchimento
+
+Regras aplicadas na etapa 2 e conferidas na etapa 3 (`_logs/3_matriz_*.csv`; meta: zero
+violações em todas):
+
+| Regra | Conteúdo |
+|---|---|
+| M1 | Hierarquia e localização sempre preenchidas; município e bacia vazios (litoral, `FORA`) recebem o polígono mais próximo |
+| M2 | `categoria` preenchida só nas classes do CAR (APP, AUR, RL) |
+| M3 | Toda peça tem pelo menos um tema: `CAR`, `PROJ`, `UC` ou `TI` |
+| M4 | `CAR` exige situação: `CAR_Habilitado`, `CAR_Analisado`, `CAR_Nao_Analisado` ou `CAR_regularizacao` |
+| M5 | `APP/RL/AUR_<situação>` implica `CAR_<situação>` (a sobreposição real de situações do SICAR é mantida) |
+| M6 | `PROJ` exige subcategoria (Recooperar, `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR`) |
+| M7 | `UC` exige esfera; `APA`, `RPPN` e `Manguezal` implicam `UC` |
+| M8 | Flags próprias da classe: 1 Recooperar; 3 `CAR_regularizacao`; 4 PANGIA/GEF/Restauração; 5 `ORR`; 6 `TI`; 7 `UC` + esfera; 8 `Manguezal` + `UC` + esfera; 9-11 `<tema>_<situação>` + `CAR_<situação>` |
+| M9 | `Sobreposicao` sempre preenchida |
+
+Quando a peça está numa classe mas escapou do identity (borda, diferença de precisão), a flag
+própria é marcada pela classe. Onde a subcategoria é ambígua (classes 1, 4 e 7, e a esfera da
+UC) vale a fonte mais próxima. Tudo o que foi preenchido assim fica em
+`_logs/2_imputacoes_<versão>_<UF>.csv`, com número de peças, área e distância máxima.
 
 ## Dados: restaurar o backup
 
@@ -67,7 +90,10 @@ python restaurar_backup.py --backup F:\BKP_PLANAVEG --destino D:\PLANAVEG_DADOS 
 setx PLANAVEG_GEO "D:\PLANAVEG_DADOS"
 ```
 
-O `viz_comum.py` lê `PLANAVEG_GEO`; nenhum script precisa ser editado. A restauração inclui o
+O `viz_comum.py` lê `PLANAVEG_GEO`; nenhum script precisa ser editado. Se o cômputo foi
+regerado em outra pasta, `PLANAVEG_C26` aponta para a sua `Computo_Planaveg_2026` (a saída
+`Visualizacao` vai para lá); o CAR dissolvido por UF é procurado em `PLANAVEG_GEO` e, se não
+estiver lá, ao lado dessa pasta. A restauração inclui o
 `Planaveg_2026_Total` do cômputo, que é a entrada desta etapa.
 
 Sem a variável, os scripts usam a pasta original no Dropbox (`GEODATABASE\GEOPACKAGE`), que hoje

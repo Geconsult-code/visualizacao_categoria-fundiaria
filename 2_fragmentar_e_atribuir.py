@@ -5,8 +5,14 @@ município e bacia, aplica as flags (identity), descarta slivers < 1 m²,
 deriva CAR / PROJ / Sobreposicao, dissolve por combinação de atributos e
 calcula Area_ha planar em Albers IBGE.
 
+Depois do identity aplica a matriz de preenchimento (ver viz_comum):
+flags próprias de cada classe, subcategoria/esfera pela fonte mais próxima
+quando ambígua, e município/bacia mais próximos onde ficaram vazios.
+
 Saída: Visualizacao/_por_uf/Visualizacao_<ver>_<UF>.gpkg
 Log:   Visualizacao/_logs/2_<ver>_<UF>.csv (áreas de entrada e slivers)
+       Visualizacao/_logs/2_imputacoes_<ver>_<UF>.csv (o que foi preenchido
+       pela classe ou pela fonte mais próxima)
 
 Uso (env geo):
   python 2_fragmentar_e_atribuir.py --uf ES                 # teste
@@ -22,6 +28,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 import pyogrio
+import shapely
 
 import viz_comum as vc
 
@@ -59,6 +66,45 @@ def carregar_bacias(bbox, janela=None):
     return vc.subdividir_gdf(vc.poligonos(gdf.to_crs(vc.ALBERS)), janela)
 
 
+def preencher_mais_proximo(sub, carregar, campos):
+    """Peças sem `campos` (fora de qualquer polígono, ex.: litoral, UF FORA)
+    recebem os valores do polígono mais próximo."""
+    sel = np.flatnonzero((sub[campos[0]] == "").to_numpy())
+    if sel.size == 0:
+        return sub, None
+    geoms = np.asarray(sub.geometry.values, dtype=object)[sel]
+    caixa = shapely.total_bounds(geoms)
+    for folga in vc.FOLGAS_BUSCA_M:
+        cats = carregar(vc.bbox_geo(caixa, folga))
+        i, d = vc.mais_proximo(geoms, np.asarray(cats.geometry.values, dtype=object))
+        if (i >= 0).all() and d.max() <= folga:
+            break
+    ok = i >= 0
+    if ok.any():
+        sub.loc[sub.index[sel[ok]], campos] = cats[campos].to_numpy()[i[ok]]
+    return sub, dict(campo=campos[0], n_pecas=int(ok.sum()),
+                     area_ha=float(shapely.area(geoms[ok]).sum() / 1e4),
+                     dist_max_m=float(d[ok].max()) if ok.any() else np.nan)
+
+
+def aplicar_matriz(sub, ver, pref, rel):
+    """Flags próprias da classe e imputação pela fonte mais próxima."""
+    reg = []
+    sub, cont = vc.forcar_flags_da_classe(sub)
+    for (campo, tier), n in cont.items():
+        reg.append(dict(regra=f"flag própria da classe {tier}", campo=campo, n_pecas=n))
+    grupos = vc.grupos_de_imputacao(sub)
+    for nome, sel, campos in grupos:
+        df = vc.imputar_mais_proximo(sub, sel, campos, ver)
+        reg += [dict(regra=nome, **r) for r in df.to_dict("records")]
+    df = vc.imputar_mais_proximo(sub, vc.selecao_uc_sem_esfera(sub), vc.UC_ESFERAS, ver)
+    reg += [dict(regra="UC sem esfera", **r) for r in df.to_dict("records")]
+    if reg:
+        rel(f"{pref}matriz: " + "; ".join(f"{r['regra']} -> {r['campo']} ({r['n_pecas']})"
+                                          for r in reg))
+    return sub, reg
+
+
 def blocos(base, bloco_km):
     if not bloco_km:
         return [base]
@@ -86,7 +132,7 @@ def processar(ver, uf, bloco_km, sobrescrever):
 
     for c in vc.CAMPOS_FLAG:
         base[c] = ""
-    resultado = []
+    resultado, imputacoes = [], []
     lista = blocos(base, bloco_km or (200 if uf == "FORA" else 0))
     for k, sub in enumerate(lista, 1):
         janela = tuple(sub.total_bounds + np.array([-100, -100, 100, 100]))
@@ -96,6 +142,11 @@ def processar(ver, uf, bloco_km, sobrescrever):
                                      ["Municipio", "cod_municipio"])
         sub = vc.atribuir_categorias(sub, carregar_bacias(bbox, janela),
                                      list(vc.BACIAS_CAMPOS.values()))
+        for carregar, campos in ((carregar_municipios, ["Municipio", "cod_municipio"]),
+                                 (carregar_bacias, list(vc.BACIAS_CAMPOS.values()))):
+            sub, r = preencher_mais_proximo(sub, carregar, campos)
+            if r:
+                imputacoes.append(dict(regra="local mais próximo", **r))
         rel(f"{pref}municípios e bacias: {len(sub):,} peças")
         for f in vc.FONTES:
             mascara = vc.carregar_mascara(f, ver, bbox, janela)
@@ -103,6 +154,8 @@ def processar(ver, uf, bloco_km, sobrescrever):
             n_flag = int((sub[f["campo"]] != "").sum())
             rel(f"{pref}{f['campo']}: {len(mascara):,} polígonos na janela, "
                 f"{n_flag:,} peças marcadas, {len(sub):,} peças")
+        sub, reg = aplicar_matriz(sub, ver, pref, rel)
+        imputacoes += reg
         resultado.append(sub)
 
     res = pd.concat(resultado, ignore_index=True)
@@ -134,6 +187,14 @@ def processar(ver, uf, bloco_km, sobrescrever):
     log.insert(0, "UF", uf)
     log.insert(0, "versao", ver)
     log.to_csv(vc.LOGS / f"2_{ver}_{uf}.csv", index=False, encoding="utf-8-sig")
+    imp = pd.DataFrame(imputacoes, columns=["regra", "campo", "n_pecas", "area_ha", "dist_max_m"])
+    if not imp.empty:
+        imp = (imp.groupby(["regra", "campo"], as_index=False)
+               .agg(n_pecas=("n_pecas", "sum"), area_ha=("area_ha", "sum"),
+                    dist_max_m=("dist_max_m", "max")))
+    imp.insert(0, "UF", uf)
+    imp.insert(0, "versao", ver)
+    imp.to_csv(vc.LOGS / f"2_imputacoes_{ver}_{uf}.csv", index=False, encoding="utf-8-sig")
     rel(f"gravado {destino.name}")
 
 

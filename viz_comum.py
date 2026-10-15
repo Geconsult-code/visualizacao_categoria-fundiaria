@@ -10,6 +10,22 @@ Regras aprovadas (29/09/2026):
 - Flags por identity: valor = rótulo ou '' (vazio).
 - Área planar em Albers IBGE (mesmo SRS do exemplo 2025); saída 2D.
 - Slivers < 1 m² são descartados e a área descartada é registrada.
+
+Regras de preenchimento (matriz de validação, 15/10/2026):
+- Colunas de hierarquia e localização sempre preenchidas (categoria só nas
+  classes do CAR). Município/bacia vazios recebem o polígono mais próximo.
+- Toda peça tem pelo menos um tema: CAR, PROJ, UC ou TI.
+- CAR exige situação (CAR_Habilitado, CAR_Analisado, CAR_Nao_Analisado ou
+  CAR_regularizacao); APP/RL/AUR_<situação> implica CAR_<situação>.
+- PROJ exige subcategoria: Licenciamento_Ambiental, Reparacao_Danos,
+  Area_Embargada, Outras_Areas, Embargo_PANGIA, GEF_Terrestre,
+  Restauracao_Ecologica ou ORR.
+- UC = APA, RPPN, demais UCs do CNUC ou Manguezal; UC exige esfera
+  (UC_federal, UC_estadual ou UC_municipal).
+- Cada classe recebe as flags próprias (ver forcar_flags_da_classe); onde a
+  subcategoria é ambígua (classes 1, 4 e 7, esfera da UC) vale a fonte mais
+  próxima (ver imputar_mais_proximo), com registro em _logs.
+- Sobreposicao sempre preenchida.
 """
 from pathlib import Path
 import os
@@ -28,7 +44,8 @@ from pyproj import CRS, Transformer
 GEO = Path(os.environ.get(
     "PLANAVEG_GEO",
     r"C:\Users\User\Dropbox\#CONSULTANCY\PLANAVEG\GEODATABASE\GEOPACKAGE"))
-C26 = GEO / "Computo_Planaveg_2026"
+# PLANAVEG_C26 permite usar um cômputo regerado em outra pasta (ex.: D:\PLANAVEG_TEMP)
+C26 = Path(os.environ.get("PLANAVEG_C26", str(GEO / "Computo_Planaveg_2026")))
 SAIDA = C26 / "Visualizacao"
 SAIDA_UF = SAIDA / "_por_uf"
 LOGS = SAIDA / "_logs"
@@ -72,12 +89,16 @@ def _fonte(campo, valor, arquivo, camada=None, where=None):
     return dict(campo=campo, valor=valor, arquivo=Path(arquivo),
                 camada=camada, where=where)
 
-_CAR_DISS = GEO / "Analise_Territorial_CAR-INCRA_dissolvido"
+# CAR dissolvido por UF: na pasta de dados ou ao lado do cômputo (restauração parcial)
+_CAR_DISS = next((p / "Analise_Territorial_CAR-INCRA_dissolvido" for p in (GEO, C26.parent)
+                  if (p / "Analise_Territorial_CAR-INCRA_dissolvido").is_dir()),
+                 GEO / "Analise_Territorial_CAR-INCRA_dissolvido")
 _CATS = (("Habilitado", "Habilitados", "Habilitado"),
          ("Analisado", "Analisados", "Analisado"),
          ("Nao_Analisado", "Nao_Analisados", "Não Analisado"))
 _TEMAS = (("APP", "Tier9_APP"), ("RL", "Tier11_RL"), ("AUR", "Tier10_AUR"))
 _RECOOP = C26 / "Tier1_Recooperar" / "P2_Recooperar_2026.gpkg"
+_ICMBIO = C26 / "Insumos" / "IN_ICMBio_2026.gpkg"
 _CNUC = GEO / "Unidades_Conservacao_CNUC20260507.gpkg"
 _APA = "Área de Proteção Ambiental"
 _RPPN = "Reserva Particular do Patrimônio Natural"
@@ -116,6 +137,11 @@ FONTES += [
     _fonte("Embargo_PANGIA", "Embargo PANGIA",
            C26 / "Tier4_Outros_Projetos" / "P2_Outros_Projetos_PANGIA_20260920.gpkg",
            "P2_OUTROS_PROJETOS_poligonos"),
+    # --- Outros projetos: ICMBio 2026 (polígonos consolidados, área total)
+    _fonte("GEF_Terrestre", "GEF Terrestre", _ICMBIO, "IN_ICMBIO",
+           "fonte = 'ICMBio_GEF_Terrestre_2026'"),
+    _fonte("Restauracao_Ecologica", "Restauração Ecológica", _ICMBIO, "IN_ICMBIO",
+           "fonte = 'ICMBio_Restauracao_2026'"),
     # --- Observatório da Restauração: só OR 2026, elegíveis
     _fonte("ORR", "ORR", C26 / "Tier5_OR" / "P2_OR_2026.gpkg",
            "P2_OR_poligonos", "elegivel_computo = 1"),
@@ -124,7 +150,8 @@ FONTES += [
     # --- Unidades de conservação (CNUC original)
     _fonte("APA", "APA", _CNUC, None, f"categoria = '{_APA}'"),
     _fonte("RPPN", "RPPN", _CNUC, None, f"categoria = '{_RPPN}'"),
-    _fonte("UC", "UC", _CNUC, None, f"categoria NOT IN ('{_APA}', '{_RPPN}')"),
+    # demais UCs (campo interno; a coluna UC de saída é derivada)
+    _fonte("UC_outras", "UC", _CNUC, None, f"categoria NOT IN ('{_APA}', '{_RPPN}')"),
     _fonte("UC_federal", "Federal", _CNUC, None, "esfera = 'Federal'"),
     _fonte("UC_estadual", "Estadual", _CNUC, None, "esfera = 'Estadual'"),
     _fonte("UC_municipal", "Municipal", _CNUC, None, "esfera = 'Municipal'"),
@@ -136,12 +163,19 @@ FONTES += [
     _fonte("QL", "QL", GEO / "Territorios_Quilombolas_INCRA20260610.gpkg"),
 ]
 
+VALOR = {f["campo"]: f["valor"] for f in FONTES}
 CAR_COMPONENTES = ["CAR_Habilitado", "CAR_Analisado", "CAR_Nao_Analisado"]
-PROJ_COMPONENTES = ["Licenciamento_Ambiental", "Reparacao_Danos", "Area_Embargada",
-                    "Outras_Areas", "Embargo_PANGIA", "ORR", "Manguezal"]
-# Mesma ordem de 2025 no campo Sobreposicao
+CAR_SITUACOES = CAR_COMPONENTES + ["CAR_regularizacao"]
+TEMAS_CAR = [f"{t}_{s}" for t, _ in _TEMAS for s, _, _ in _CATS]
+RECOOPERAR = ["Licenciamento_Ambiental", "Reparacao_Danos", "Area_Embargada", "Outras_Areas"]
+OUTROS_PROJETOS = ["Embargo_PANGIA", "GEF_Terrestre", "Restauracao_Ecologica"]
+PROJ_COMPONENTES = RECOOPERAR + OUTROS_PROJETOS + ["ORR"]
+UC_TIPOS = ["APA", "RPPN", "UC_outras"]
+UC_COMPONENTES = UC_TIPOS + ["Manguezal"]
+UC_ESFERAS = ["UC_federal", "UC_estadual", "UC_municipal"]
+# Mesma ordem de 2025 no campo Sobreposicao (o token UC é calculado à parte)
 TOKENS_SOBREPOSICAO = [("PROJ", "PROJ"), ("CAR", "CAR"), ("APA", "APA"),
-                       ("RPPN", "RPPN"), ("UC", "UC"), ("TI", "TI"),
+                       ("RPPN", "RPPN"), ("_UC_token", "UC"), ("TI", "TI"),
                        ("AS_", "AS"), ("QL", "QL")]
 
 CAMPOS_HIER = ["hierarquia_planaveg", "tier", "categoria"]
@@ -151,7 +185,7 @@ CAMPOS_FLAG = [f["campo"] for f in FONTES]
 COLUNAS_SAIDA = (CAMPOS_HIER + ["computo", "Area_ha"] + CAMPOS_LOCAL
                  + ["CAR"] + CAR_COMPONENTES + ["CAR_regularizacao"]
                  + [f"{t}_{s}" for t, _ in _TEMAS for s, _, _ in _CATS]
-                 + ["PROJ"] + PROJ_COMPONENTES
+                 + ["PROJ"] + PROJ_COMPONENTES + ["Manguezal"]
                  + ["APA", "RPPN", "UC", "UC_federal", "UC_estadual", "UC_municipal",
                     "TI", "AS_", "QL", "Sobreposicao"])
 CHAVES_DISSOLVE = [c for c in COLUNAS_SAIDA if c not in ("computo", "Area_ha")]
@@ -444,15 +478,146 @@ def atribuir_categorias(base, cats, campos):
     return poligonos(gpd.GeoDataFrame(out, geometry="geometry", crs=base.crs))
 
 
+def _tier(gdf):
+    return pd.to_numeric(gdf["tier"], errors="coerce").round().fillna(-1).astype(int).to_numpy()
+
+
+_SUFIXO_CATEGORIA = {"Habilitados": "Habilitado", "Analisados": "Analisado",
+                     "Nao_Analisados": "Nao_Analisado"}
+_TEMA_TIER = {9: "APP", 10: "AUR", 11: "RL"}
+
+
+def _marcar(gdf, mascara, campo):
+    m = np.asarray(mascara) & (gdf[campo].to_numpy() == "")
+    if m.any():
+        gdf.loc[m, campo] = VALOR[campo]
+
+
+def propagar_tema_para_car(gdf):
+    """APP/RL/AUR_<situação> implica CAR_<situação>."""
+    for t, _ in _TEMAS:
+        for s, _, _ in _CATS:
+            _marcar(gdf, gdf[f"{t}_{s}"].to_numpy() != "", f"CAR_{s}")
+    return gdf
+
+
+def forcar_flags_da_classe(gdf):
+    """Flags próprias que decorrem diretamente da classe da hierarquia
+    (a peça está na classe porque está na fonte; bordas podem ter escapado do
+    identity por diferença de projeção/precisão). Devolve contagem por campo."""
+    tier = _tier(gdf)
+    cont = {}
+
+    def marca(sel, campo):
+        n = int((sel & (gdf[campo].to_numpy() == "")).sum())
+        if n:
+            cont[(campo, int(tier[sel][0]) if sel.any() else -1)] = n
+        _marcar(gdf, sel, campo)
+
+    marca(tier == 3, "CAR_regularizacao")
+    marca(tier == 5, "ORR")
+    marca(tier == 6, "TI")
+    marca(tier == 8, "Manguezal")
+    cat = gdf["categoria"].to_numpy()
+    for t, tema in _TEMA_TIER.items():
+        for c, s in _SUFIXO_CATEGORIA.items():
+            sel = (tier == t) & (cat == c)
+            marca(sel, f"{tema}_{s}")
+            marca(sel, f"CAR_{s}")
+    return gdf, cont
+
+
+# Grupos onde a subcategoria precisa vir da fonte mais próxima:
+# (nome, seleção das peças, campos candidatos)
+def grupos_de_imputacao(gdf):
+    tier = _tier(gdf)
+    vazio = lambda campos: (gdf[campos] == "").all(axis=1).to_numpy()  # noqa: E731
+    return [("classe 1 sem componente Recooperar", (tier == 1) & vazio(RECOOPERAR), RECOOPERAR),
+            ("classe 4 sem projeto", (tier == 4) & vazio(OUTROS_PROJETOS), OUTROS_PROJETOS),
+            ("classe 7 sem UC", (tier == 7) & vazio(UC_TIPOS), UC_TIPOS)]
+
+
+def selecao_uc_sem_esfera(gdf):
+    return ((gdf[UC_COMPONENTES] != "").any(axis=1)
+            & (gdf[UC_ESFERAS] == "").all(axis=1)).to_numpy()
+
+
+def mais_proximo(geoms, alvos):
+    """Para cada geometria, (índice do alvo mais próximo, distância); -1/inf se não houver."""
+    geoms = np.asarray(geoms, dtype=object)
+    idx = np.full(len(geoms), -1)
+    dist = np.full(len(geoms), np.inf)
+    if len(alvos) == 0 or len(geoms) == 0:
+        return idx, dist
+    (gi, ai), d = shapely.STRtree(alvos).query_nearest(geoms, return_distance=True,
+                                                       all_matches=False)
+    idx[gi], dist[gi] = ai, d
+    return idx, dist
+
+
+def _poligonos_fonte(fonte, ver, bbox):
+    camada = camada_de(fonte["arquivo"], fonte["camada"], ver)
+    gdf = ler_camada(fonte["arquivo"], camada, fonte["where"], bbox, columns=[])
+    if gdf.empty:
+        return np.empty(0, dtype=object)
+    if gdf.crs is None:
+        gdf = gdf.set_crs(CRS_GEO)
+    return np.asarray(poligonos(gdf.to_crs(ALBERS)).geometry.values, dtype=object)
+
+
+FOLGAS_BUSCA_M = (2_000, 50_000, 500_000, 5_000_000)
+
+
+def imputar_mais_proximo(gdf, selecao, campos, ver):
+    """Nas peças selecionadas, marca o campo cuja fonte tem o polígono mais
+    próximo (distância 0 = toca). Amplia a busca até achar alguma fonte.
+    Devolve DataFrame com campo, n_pecas, area_ha, dist_max_m."""
+    idx = np.flatnonzero(selecao)
+    if idx.size == 0:
+        return pd.DataFrame()
+    geoms = np.asarray(gdf.geometry.values, dtype=object)[idx]
+    caixa = shapely.total_bounds(geoms)
+    fontes = [f for f in FONTES if f["campo"] in campos]
+    for folga in FOLGAS_BUSCA_M:
+        bbox = bbox_geo(caixa, folga)
+        dists = np.vstack([mais_proximo(geoms, _poligonos_fonte(f, ver, bbox))[1]
+                           for f in fontes])
+        dmin = dists.min(axis=0)
+        # só é o mais próximo de fato se nada mais perto pode estar fora da caixa
+        if np.isfinite(dmin).all() and dmin.max() <= folga:
+            break
+    escolha = dists.argmin(axis=0)
+    ok = np.isfinite(dists.min(axis=0))
+    linhas = []
+    for k, f in enumerate(fontes):
+        m = ok & (escolha == k)
+        if m.any():
+            gdf.loc[gdf.index[idx[m]], f["campo"]] = f["valor"]
+            linhas.append(dict(campo=f["campo"], n_pecas=int(m.sum()),
+                               area_ha=float(shapely.area(geoms[m]).sum() / 1e4),
+                               dist_max_m=float(dists[k, m].max())))
+    if (~ok).any():
+        linhas.append(dict(campo="(nenhuma fonte encontrada)", n_pecas=int((~ok).sum()),
+                           area_ha=float(shapely.area(geoms[~ok]).sum() / 1e4),
+                           dist_max_m=np.nan))
+    return pd.DataFrame(linhas)
+
+
 def derivar_campos(gdf):
-    """CAR (qualquer categoria), PROJ (qualquer projeto) e Sobreposicao."""
-    gdf["CAR"] = np.where((gdf[CAR_COMPONENTES] != "").any(axis=1), "CAR", "")
-    gdf["PROJ"] = np.where((gdf[PROJ_COMPONENTES] != "").any(axis=1), "PROJ", "")
+    """CAR, PROJ, UC (derivados das subcategorias) e Sobreposicao."""
+    gdf = propagar_tema_para_car(gdf)
+    tem = lambda campos: (gdf[campos] != "").any(axis=1).to_numpy()  # noqa: E731
+    gdf["CAR"] = np.where(tem(CAR_SITUACOES + TEMAS_CAR), "CAR", "")
+    gdf["PROJ"] = np.where(tem(PROJ_COMPONENTES), "PROJ", "")
+    gdf["UC"] = np.where(tem(UC_COMPONENTES), "UC", "")
+    # token UC: demais UCs, ou manguezal fora de APA/RPPN (evita "APAUC" redundante)
+    gdf["_UC_token"] = np.where(tem(["UC_outras"])
+                                | (tem(["Manguezal"]) & ~tem(["APA", "RPPN"])), "UC", "")
     sob = pd.Series("", index=gdf.index)
     for campo, token in TOKENS_SOBREPOSICAO:
         sob = sob + np.where(gdf[campo] != "", token, "")
     gdf["Sobreposicao"] = sob
-    return gdf
+    return gdf.drop(columns=["_UC_token", "UC_outras"])
 
 
 def arquivo_uf(ver, uf):
