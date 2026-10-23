@@ -18,7 +18,7 @@ Regras de preenchimento (matriz de validação, 15/10/2026):
 - CAR exige situação (CAR_Habilitado, CAR_Analisado, CAR_Nao_Analisado ou
   CAR_regularizacao); APP/RL/AUR_<situação> implica CAR_<situação>.
 - PROJ exige subcategoria: Licenciamento_Ambiental, Reparacao_Danos,
-  Area_Embargada, Outras_Areas, Embargo_PANGIA, GEF_Terrestre,
+  Area_Embargada, Outras_Areas, MonitoRAD, Embargo_PANGIA, GEF_Terrestre,
   Restauracao_Ecologica ou ORR.
 - UC = APA, RPPN ou demais UCs do CNUC; UC exige esfera
   (UC_federal, UC_estadual ou UC_municipal).
@@ -134,6 +134,10 @@ FONTES += [
            "P2_RECOOPERAR_poligonos", "elegivel_computo = 1 AND categoria = 'embargo'"),
     _fonte("Outras_Areas", "Outras Areas", _RECOOP,
            "P2_RECOOPERAR_poligonos", "elegivel_computo = 1 AND categoria = 'outras'"),
+    # --- MonitoRAD (IBAMA, classe 2 desde 20/10/2026): polígonos "Com indício de recuperação"
+    #     consolidados (recortados pelo embargo, sem sobreposição), área total
+    _fonte("MonitoRAD", "MonitoRAD", C26 / "Tier2_MonitoRAD" / "P2_MonitoRAD_2026.gpkg",
+           "P2_MONITORAD_poligonos", "elegivel_computo = 1"),
     # --- Outros projetos: embargos PANGIA (polígonos completos)
     _fonte("Embargo_PANGIA", "Embargo PANGIA",
            C26 / "Tier4_Outros_Projetos" / "P2_Outros_Projetos_PANGIA_20260920.gpkg",
@@ -170,7 +174,7 @@ CAR_SITUACOES = CAR_COMPONENTES + ["CAR_regularizacao"]
 TEMAS_CAR = [f"{t}_{s}" for t, _ in _TEMAS for s, _, _ in _CATS]
 RECOOPERAR = ["Licenciamento_Ambiental", "Reparacao_Danos", "Area_Embargada", "Outras_Areas"]
 OUTROS_PROJETOS = ["Embargo_PANGIA", "GEF_Terrestre", "Restauracao_Ecologica"]
-PROJ_COMPONENTES = RECOOPERAR + OUTROS_PROJETOS + ["ORR"]
+PROJ_COMPONENTES = RECOOPERAR + ["MonitoRAD"] + OUTROS_PROJETOS + ["ORR"]
 UC_TIPOS = ["APA", "RPPN", "UC_outras"]
 UC_COMPONENTES = UC_TIPOS
 UC_ESFERAS = ["UC_federal", "UC_estadual", "UC_municipal"]
@@ -517,6 +521,7 @@ def forcar_flags_da_classe(gdf):
             cont[(campo, int(tier[sel][0]))] = (int(falta.sum()), area)
         _marcar(gdf, sel, campo)
 
+    marca(tier == 2, "MonitoRAD")
     marca(tier == 3, "CAR_regularizacao")
     marca(tier == 5, "ORR")
     marca(tier == 6, "TI")
@@ -620,6 +625,16 @@ def derivar_campos(gdf):
         sob = sob + np.where(gdf[campo] != "", token, "")
     gdf["Sobreposicao"] = sob
     return gdf.drop(columns=["_UC_token", "UC_outras"])
+
+
+def completar_colunas(gdf):
+    """Saídas por UF geradas antes de uma coluna nova (ex.: MonitoRAD, 21/10/2026) recebem a coluna
+    vazia, na ordem de COLUNAS_SAIDA. Só vale para UFs onde a fonte nova não tem polígonos."""
+    for c in COLUNAS_SAIDA:
+        if c not in gdf.columns:
+            gdf[c] = ""
+    extras = [c for c in gdf.columns if c not in COLUNAS_SAIDA and c != gdf.geometry.name]
+    return gdf[COLUNAS_SAIDA + extras + [gdf.geometry.name]]
 
 
 def arquivo_uf(ver, uf):

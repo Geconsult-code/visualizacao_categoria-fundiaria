@@ -38,7 +38,7 @@ MATRIZ = [
     ("M4", "CAR exige situação: CAR_Habilitado, CAR_Analisado, CAR_Nao_Analisado ou "
            "CAR_regularizacao; e situação/APP/RL/AUR implica CAR"),
     ("M5", "APP/RL/AUR_<situação> implica CAR_<situação>"),
-    ("M6", "PROJ exige subcategoria (Recooperar, Embargo_PANGIA, GEF_Terrestre, "
+    ("M6", "PROJ exige subcategoria (Recooperar, MonitoRAD, Embargo_PANGIA, GEF_Terrestre, "
            "Restauracao_Ecologica, ORR) e subcategoria implica PROJ"),
     ("M7", "UC exige esfera (UC_federal, UC_estadual, UC_municipal); APA e RPPN "
            "implicam UC"),
@@ -55,7 +55,7 @@ def flags_proprias(hier, tier, categoria):
     tema = {9: "APP", 10: "AUR", 11: "RL"}.get(t)
     if tema:
         return [[f"{tema}_{suf}"], [f"CAR_{suf}"], ["CAR"]]
-    return {1: [RECOOPERAR, ["PROJ"]], 3: [["CAR_regularizacao"], ["CAR"]],
+    return {1: [RECOOPERAR, ["PROJ"]], 2: [["MonitoRAD"], ["PROJ"]], 3: [["CAR_regularizacao"], ["CAR"]],
             4: [vc.OUTROS_PROJETOS, ["PROJ"]], 5: [["ORR"], ["PROJ"]], 6: [["TI"]],
             7: [["UC"], vc.UC_ESFERAS], 8: [["Manguezal"]]}.get(t, [])
 
@@ -98,7 +98,7 @@ def validar(ver, uf):
     if not arq.exists() or not log.exists():
         print(f"-- {ver} {uf}: saída da etapa 2 não encontrada")
         return None
-    gdf = pyogrio.read_dataframe(arq, layer=vc.camada_uf(ver, uf))
+    gdf = vc.completar_colunas(pyogrio.read_dataframe(arq, layer=vc.camada_uf(ver, uf)))
     ent = pd.read_csv(log, keep_default_na=False).drop(columns=["versao", "UF"])
     chave = ["hierarquia_planaveg", "categoria"]
     said = gdf.groupby(chave)["Area_ha"].sum().rename("area_saida_ha").reset_index()

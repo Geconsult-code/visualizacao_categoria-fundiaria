@@ -37,7 +37,7 @@ def consolidar(ver):
     # 2ª passada: grava UF por UF (append), sem carregar o Brasil inteiro na memória
     camada = f"Planaveg_2026_Visualizacao_{ver}"
     for i, (p, uf) in enumerate(zip(arquivos, ufs)):
-        gdf = pyogrio.read_dataframe(p, layer=vc.camada_uf(ver, uf))
+        gdf = vc.completar_colunas(pyogrio.read_dataframe(p, layer=vc.camada_uf(ver, uf)))
         gdf["computo"] = gdf["hierarquia_planaveg"].map(computo)
         pyogrio.write_dataframe(gdf, DESTINO, layer=camada, driver="GPKG",
                                 promote_to_multi=True, append=i > 0)

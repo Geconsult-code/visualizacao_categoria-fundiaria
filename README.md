@@ -39,7 +39,7 @@ exemplo 2025), geometria 2D.
 | Localização | `UF`, `Bioma`, `Municipio`, `cod_municipio`, `Bacia` (micro RH), `Bacia_meso`, `Regiao_Hidrografica` (macro RH) |
 | CAR | `CAR` (tema), `CAR_Habilitado`, `CAR_Analisado`, `CAR_Nao_Analisado`, `CAR_regularizacao` (situação) |
 | APP / RL / AUR | `APP_Habilitado`, `APP_Analisado`, `APP_Nao_Analisado`, `RL_*`, `AUR_*` (mesmas três categorias) |
-| Projetos | `PROJ` (tema), `Licenciamento_Ambiental`, `Reparacao_Danos`, `Area_Embargada`, `Outras_Areas`, `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR` (subcategorias) |
+| Projetos | `PROJ` (tema), `Licenciamento_Ambiental`, `Reparacao_Danos`, `Area_Embargada`, `Outras_Areas`, `MonitoRAD`, `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR` (subcategorias) |
 | Manguezal | `Manguezal` (tema isolado, Pró-Manguezal) |
 | Unidades de conservação | `APA`, `RPPN` (subcategorias e detalhe), `UC` (tema), `UC_federal`, `UC_estadual`, `UC_municipal` (esfera) |
 | Territórios | `TI`, `AS_`, `QL` |
@@ -62,9 +62,9 @@ violações em todas):
 | M3 | Toda peça tem pelo menos um tema: `CAR`, `PROJ`, `UC`, `TI` ou `Manguezal` |
 | M4 | `CAR` exige situação: `CAR_Habilitado`, `CAR_Analisado`, `CAR_Nao_Analisado` ou `CAR_regularizacao` |
 | M5 | `APP/RL/AUR_<situação>` implica `CAR_<situação>` (a sobreposição real de situações do SICAR é mantida) |
-| M6 | `PROJ` exige subcategoria (Recooperar, `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR`) |
+| M6 | `PROJ` exige subcategoria (Recooperar, `MonitoRAD`, `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR`) |
 | M7 | `UC` exige esfera; `APA` e `RPPN` implicam `UC` |
-| M8 | Flags próprias da classe: 1 Recooperar; 3 `CAR_regularizacao`; 4 PANGIA/GEF/Restauração; 5 `ORR`; 6 `TI`; 7 `UC` + esfera; 8 `Manguezal`; 9-11 `<tema>_<situação>` + `CAR_<situação>` |
+| M8 | Flags próprias da classe: 1 Recooperar; 2 `MonitoRAD`; 3 `CAR_regularizacao`; 4 PANGIA/GEF/Restauração; 5 `ORR`; 6 `TI`; 7 `UC` + esfera; 8 `Manguezal`; 9-11 `<tema>_<situação>` + `CAR_<situação>` |
 | M9 | `Sobreposicao` sempre preenchida |
 
 Quando a peça está numa classe mas escapou do identity (borda, diferença de precisão), a flag

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0] - 2026-10-21
+### Adicionado
+- Subcategoria de PROJ `MonitoRAD` (IBAMA, classe 2 do cômputo v1.0.0), lida de
+  `Tier2_MonitoRAD/P2_MonitoRAD_2026.gpkg` (polígonos "Com indício de recuperação" consolidados).
+- `completar_colunas`: saídas por UF geradas antes da coluna nova recebem a coluna vazia na
+  validação e na consolidação (o MonitoRAD só existe nas 9 UFs da Amazônia Legal, as únicas
+  reprocessadas).
+
 ## [1.1.0] - 2026-10-15
 ### Adicionado
 - Subcategorias de PROJ `GEF_Terrestre` e `Restauracao_Ecologica` (ICMBio 2026,
