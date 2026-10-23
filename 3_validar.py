@@ -5,10 +5,10 @@ Etapa 3: valida as saídas da etapa 2 por UF e versão.
   A. Conservação de área por classe: entrada (Albers) = saída + slivers
   B. Diferença para a área geodésica do cômputo (informativa)
   C. Geometrias: inválidas, vazias, menor feição
-  D. Coerência classe x flag própria (ex.: classe TI deveria ter flag TI)
+  D. % da área de cada classe sem nenhuma violação da matriz
   E. Tabela cruzada classe x flag (ha) para conferência visual
   F. Matriz de preenchimento (regras M1 a M9, ver MATRIZ abaixo): peças e
-     área que violam cada regra; a meta é zero em todas
+     área que violam cada regra (v2.0.0); a meta é zero em todas
 
 Uso (env geo):  python 3_validar.py --uf ES
                 python 3_validar.py --todas
@@ -26,69 +26,67 @@ import viz_comum as vc
 
 TOL_CONSERVACAO = 1e-4  # 0,01 %
 
-RECOOPERAR = vc.RECOOPERAR
-
-# Matriz de preenchimento: (código, descrição). As regras estão em matriz().
+# Matriz de preenchimento v2.0.0 (código, descrição). As regras estão em matriz().
 MATRIZ = [
-    ("M1", "Colunas de hierarquia e localização preenchidas (hierarquia_planaveg, tier, "
-           "computo, Area_ha, UF, Bioma, Municipio, cod_municipio, Bacia, Bacia_meso, "
-           "Regiao_Hidrografica)"),
-    ("M2", "categoria preenchida nas classes 9-11 (APP/AUR/RL) e vazia nas demais"),
-    ("M3", "Pelo menos um tema: CAR, PROJ, UC, TI ou Manguezal"),
-    ("M4", "CAR exige situação: CAR_Habilitado, CAR_Analisado, CAR_Nao_Analisado ou "
-           "CAR_regularizacao; e situação/APP/RL/AUR implica CAR"),
-    ("M5", "APP/RL/AUR_<situação> implica CAR_<situação>"),
-    ("M6", "PROJ exige subcategoria (Recooperar, MonitoRAD, Embargo_PANGIA, GEF_Terrestre, "
-           "Restauracao_Ecologica, ORR) e subcategoria implica PROJ"),
-    ("M7", "UC exige esfera (UC_federal, UC_estadual, UC_municipal); APA e RPPN "
-           "implicam UC"),
-    ("M8", "Flags próprias da classe (ver flags_proprias)"),
-    ("M9", "Sobreposicao preenchida"),
+    ("M1", "Hierarquia, nomes e localização preenchidos (hierarquia_planaveg, tier, Nome_Abreviado, Nome_Detalhado, "
+           "Area_ha, UF, Bioma, Municipio, cod_municipio, Bacia, Bacia_meso, Regiao_Hidrografica)"),
+    ("M2", "CAR e CAR_Condicao preenchidos nas classes 3, 9, 10 e 11 e vazios nas demais"),
+    ("M3", "PROJ e PROJ_Categoria preenchidos nas classes 1, 2, 4 e 5 e vazios nas demais"),
+    ("M4", "UC, UC_Nome, UC_Manejo e UC_Esfera preenchidos na classe 7 e vazios nas demais"),
+    ("M5", "TI e TI_Nome preenchidos na classe 6 e vazios nas demais"),
+    ("M6", "Manguezal preenchido na classe 8 e vazio nas demais"),
+    ("M7", "Textos coerentes com a classe (hierarquia, nomes, CAR_Condicao, PROJ_Categoria na lista da planilha)"),
+    ("M8", "Sobreposicao preenchida e com o token da própria classe (PROJ, CAR, UC/APA/RPPN, TI, MANG)"),
 ]
 
 
-def flags_proprias(hier, tier, categoria):
-    """Lista de grupos; a peça precisa ter pelo menos um campo de cada grupo."""
-    t = int(round(float(tier)))
-    suf = {"Habilitados": "Habilitado", "Analisados": "Analisado",
-           "Nao_Analisados": "Nao_Analisado"}.get(categoria, "")
-    tema = {9: "APP", 10: "AUR", 11: "RL"}.get(t)
-    if tema:
-        return [[f"{tema}_{suf}"], [f"CAR_{suf}"], ["CAR"]]
-    return {1: [RECOOPERAR, ["PROJ"]], 2: [["MonitoRAD"], ["PROJ"]], 3: [["CAR_regularizacao"], ["CAR"]],
-            4: [vc.OUTROS_PROJETOS, ["PROJ"]], 5: [["ORR"], ["PROJ"]], 6: [["TI"]],
-            7: [["UC"], vc.UC_ESFERAS], 8: [["Manguezal"]]}.get(t, [])
+def _permitidos():
+    """{tier: (hierarquias, (abreviado, detalhado) possíveis, condições, categorias de projeto)}."""
+    p = {}
+    for t in range(1, 12):
+        hier = set(vc.FONTES_T4.values()) if t == 4 else {vc.HIERARQUIA[t]}
+        nomes = ({(a, d) for a, d, _ in vc.NOMES_RECOOPERAR.values()} if t == 1 else {vc.NOMES[t]})
+        cond = ({vc.CAR_CONDICAO_T3} if t == 3 else set(vc.CAR_CONDICAO.values()) if t in (9, 10, 11) else {""})
+        pc = ({x for _, _, x in vc.NOMES_RECOOPERAR.values()} if t == 1 else {vc.PROJ_CATEGORIA.get(t, "")})
+        p[t] = (hier, nomes, cond, pc)
+    return p
+
+
+TOKEN_PROPRIO = {1: ["PROJ"], 2: ["PROJ"], 4: ["PROJ"], 5: ["PROJ"], 3: ["CAR"], 9: ["CAR"], 10: ["CAR"], 11: ["CAR"],
+                 6: ["TI"], 7: ["UC", "APA", "RPPN"], 8: ["MANG"]}
 
 
 def matriz(gdf):
     """DataFrame booleano: True onde a peça viola a regra."""
-    vazio = lambda c: (gdf[c].fillna("").astype(str) == "")  # noqa: E731
-    tem = lambda cs: (gdf[cs].fillna("").astype(str) != "").any(axis=1)  # noqa: E731
+    s = lambda c: gdf[c].fillna("").astype(str)  # noqa: E731
+    cheio = lambda cs: pd.concat([s(c) != "" for c in cs], axis=1).all(axis=1)  # noqa: E731
+    vazio = lambda cs: pd.concat([s(c) == "" for c in cs], axis=1).all(axis=1)  # noqa: E731
     tier = pd.to_numeric(gdf["tier"], errors="coerce").round()
-    car_classe = tier.isin([9, 10, 11])
     v = pd.DataFrame(index=gdf.index)
-    v["M1"] = (gdf[["hierarquia_planaveg", "UF", "Bioma", "Municipio", "cod_municipio",
-                    "Bacia", "Bacia_meso", "Regiao_Hidrografica"]].fillna("").astype(str) == ""
-               ).any(axis=1) | tier.isna() | gdf["Area_ha"].isna() | (
-                   gdf["computo"].isna() if gdf["computo"].notna().any() else False)
-    v["M2"] = (car_classe & vazio("categoria")) | (~car_classe & ~vazio("categoria"))
-    v["M3"] = ~tem(["CAR", "PROJ", "UC", "TI", "Manguezal"])
-    v["M4"] = (~vazio("CAR") & ~tem(vc.CAR_SITUACOES)) | (
-        vazio("CAR") & tem(vc.CAR_SITUACOES + vc.TEMAS_CAR))
-    m5 = pd.Series(False, index=gdf.index)
-    for c in vc.TEMAS_CAR:
-        m5 |= ~vazio(c) & vazio("CAR_" + c.split("_", 1)[1])
-    v["M5"] = m5
-    v["M6"] = (~vazio("PROJ") & ~tem(vc.PROJ_COMPONENTES)) | (
-        vazio("PROJ") & tem(vc.PROJ_COMPONENTES))
-    v["M7"] = (~vazio("UC") & ~tem(vc.UC_ESFERAS)) | (
-        vazio("UC") & tem(["APA", "RPPN"]))
-    m8 = pd.Series(False, index=gdf.index)
-    for (h, t, c), idx in gdf.groupby(["hierarquia_planaveg", "tier", "categoria"]).groups.items():
-        for grupo in flags_proprias(h, t, c):
-            m8.loc[idx] |= ~tem(grupo).loc[idx]
+    v["M1"] = ~cheio(["hierarquia_planaveg", "Nome_Abreviado", "Nome_Detalhado"] + vc.CAMPOS_LOCAL) | tier.isna() | gdf["Area_ha"].isna()
+    for cod, tiers, campos in (("M2", vc.TIERS_CAR, ["CAR", "CAR_Condicao"]), ("M3", vc.TIERS_PROJ, ["PROJ", "PROJ_Categoria"]),
+                               ("M4", (7,), ["UC", "UC_Nome", "UC_Manejo", "UC_Esfera"]), ("M5", (6,), ["TI", "TI_Nome"]),
+                               ("M6", (8,), ["Manguezal"])):
+        dentro = tier.isin(tiers)
+        v[cod] = (dentro & ~cheio(campos)) | (~dentro & ~vazio(campos))
+    perm = _permitidos()
+    m7 = pd.Series(False, index=gdf.index)
+    for t, (hier, nomes, cond, pc) in perm.items():
+        sel = tier == t
+        if not sel.any():
+            continue
+        par = list(zip(s("Nome_Abreviado")[sel], s("Nome_Detalhado")[sel]))
+        m7[sel] = (~s("hierarquia_planaveg")[sel].isin(hier) | ~pd.Series([x in nomes for x in par], index=sel[sel].index)
+                   | ~s("CAR_Condicao")[sel].isin(cond) | ~s("PROJ_Categoria")[sel].isin(pc))
+    m7 |= ~tier.isin(range(1, 12))
+    v["M7"] = m7
+    sob = s("Sobreposicao")
+    m8 = sob == ""
+    for t, toks in TOKEN_PROPRIO.items():
+        sel = tier == t
+        if sel.any():
+            m8[sel] |= ~pd.concat([sob[sel].str.contains(k, regex=False) for k in toks], axis=1).any(axis=1)
     v["M8"] = m8
-    v["M9"] = vazio("Sobreposicao")
     return v
 
 
@@ -100,7 +98,10 @@ def validar(ver, uf):
         return None
     gdf = vc.completar_colunas(pyogrio.read_dataframe(arq, layer=vc.camada_uf(ver, uf)))
     ent = pd.read_csv(log, keep_default_na=False).drop(columns=["versao", "UF"])
-    chave = ["hierarquia_planaveg", "categoria"]
+    chave = ["tier", "categoria"]
+    gdf["tier"] = pd.to_numeric(gdf["tier"]).round().astype(int)
+    gdf["categoria"] = gdf["CAR_Condicao"].map(vc.CATEGORIA_DE_CONDICAO).fillna("")
+    ent["categoria"] = ent["categoria"].fillna("").astype(str)
     said = gdf.groupby(chave)["Area_ha"].sum().rename("area_saida_ha").reset_index()
     t = ent.merge(said, on=chave, how="outer").fillna(0)
     t["dif_conservacao_ha"] = (t["area_entrada_albers_ha"] - t["area_saida_ha"]
@@ -113,14 +114,13 @@ def validar(ver, uf):
     viol = matriz(gdf)
     coer = []
     for _, r in t.iterrows():
-        sel = ((gdf["hierarquia_planaveg"] == r["hierarquia_planaveg"])
-               & (gdf["categoria"] == r["categoria"]))
+        sel = (gdf["tier"] == r["tier"]) & (gdf["categoria"] == r["categoria"])
         if not sel.any():
             coer.append(np.nan)
             continue
         a = gdf.loc[sel, "Area_ha"]
-        coer.append(100 * a[~viol.loc[sel, "M8"]].sum() / a.sum())
-    t["pct_area_com_flag_propria"] = coer
+        coer.append(100 * a[~viol.loc[sel].any(axis=1)].sum() / a.sum())
+    t["pct_area_sem_violacao"] = coer
     mat = pd.DataFrame([dict(versao=ver, UF=uf, regra=cod, descricao=desc,
                              pecas_violando=int(viol[cod].sum()),
                              area_violando_ha=round(float(gdf.loc[viol[cod], "Area_ha"].sum()), 4))
@@ -133,8 +133,7 @@ def validar(ver, uf):
     n_vazia = int(shapely.is_empty(geom).sum())
     menor = gdf["Area_ha"].min()
 
-    flags = [c for c in vc.COLUNAS_SAIDA
-             if c not in vc.CAMPOS_HIER + vc.CAMPOS_LOCAL + ["computo", "Area_ha", "Sobreposicao"]]
+    flags = ["CAR", "PROJ", "Manguezal", "APA", "RPPN", "UC", "TI", "AS", "QL"]
     cruz = pd.DataFrame({f: gdf.loc[gdf[f] != ""].groupby("hierarquia_planaveg")["Area_ha"].sum()
                          for f in flags}).fillna(0).round(2)
     cruz.insert(0, "total_ha", gdf.groupby("hierarquia_planaveg")["Area_ha"].sum().round(2))
@@ -157,10 +156,10 @@ def validar(ver, uf):
     print(f"   B. Albers vs geodésica: {t['dif_albers_vs_geodesica_pct'].min():+.3f}% a "
           f"{t['dif_albers_vs_geodesica_pct'].max():+.3f}%")
     print(f"   C. geometrias inválidas {n_inval}, vazias {n_vazia}, menor feição {menor:.6f} ha")
-    print("   D. % da área da classe com a flag própria:")
+    print("   D. % da área da classe sem violação da matriz:")
     for _, r in t.iterrows():
         cat = f" [{r['categoria']}]" if r["categoria"] else ""
-        print(f"      {r['pct_area_com_flag_propria']:6.2f}%  {r['hierarquia_planaveg']}{cat}")
+        print(f"      {r['pct_area_sem_violacao']:6.2f}%  classe {int(r['tier'])}{cat}")
     print("   F. matriz de preenchimento (peças / ha violando):")
     for _, r in mat.iterrows():
         marca = "OK " if r["pecas_violando"] == 0 else "!! "

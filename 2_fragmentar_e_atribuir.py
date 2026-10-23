@@ -5,9 +5,9 @@ município e bacia, aplica as flags (identity), descarta slivers < 1 m²,
 deriva CAR / PROJ / Sobreposicao, dissolve por combinação de atributos e
 calcula Area_ha planar em Albers IBGE.
 
-Depois do identity aplica a matriz de preenchimento (ver viz_comum):
-flags próprias de cada classe, subcategoria/esfera pela fonte mais próxima
-quando ambígua, e município/bacia mais próximos onde ficaram vazios.
+Depois do identity (v2.0.0, ver viz_comum): token do próprio tier garantido, categoria do Recooperar
+(classe 1) e origem da classe 4 pela fonte mais próxima quando a borda escapa, nomes de todas as UCs
+(classe 7) e TIs (classe 6) que contêm cada trecho, e município/bacia mais próximos onde ficaram vazios.
 
 Saída: Visualizacao/_por_uf/Visualizacao_<ver>_<UF>.gpkg
 Log:   Visualizacao/_logs/2_<ver>_<UF>.csv (áreas de entrada e slivers)
@@ -40,9 +40,9 @@ def ler_total(ver, uf):
         return gdf, pd.DataFrame()
     gdf = gdf.rename(columns={"hierarquia": "hierarquia_planaveg", "uf": "UF"})
     gdf["categoria"] = gdf["categoria"].fillna("").astype(str).replace("<NA>", "")
-    area_geod = (gdf.groupby(["hierarquia_planaveg", "categoria"])["Area_ha"].sum()
-                 .rename("area_geodesica_ha"))
-    gdf = gdf[["hierarquia_planaveg", "tier", "categoria", "Bioma", "UF", "geometry"]]
+    gdf["tier"] = pd.to_numeric(gdf["tier"]).round().astype(int)
+    area_geod = gdf.groupby(["tier", "categoria"])["Area_ha"].sum().rename("area_geodesica_ha")
+    gdf = gdf[["tier", "categoria", "Bioma", "UF", "geometry"]]
     gdf["Bioma"] = gdf["Bioma"].fillna("")
     return vc.poligonos(gdf.to_crs(vc.ALBERS)), area_geod
 
@@ -87,22 +87,40 @@ def preencher_mais_proximo(sub, carregar, campos):
                      dist_max_m=float(d[ok].max()) if ok.any() else np.nan)
 
 
-def aplicar_matriz(sub, ver, pref, rel):
-    """Flags próprias da classe e imputação pela fonte mais próxima."""
+def aplicar_matriz(sub, ver, bbox, pref, rel):
+    """Token do próprio tier, origem da classe 1/4 pela fonte mais próxima e rótulos de UC (7) e TI (6)."""
     reg = []
-    sub, cont = vc.forcar_flags_da_classe(sub)
+    sub, cont = vc.forcar_flags_internas(sub)
     for (campo, tier), (n, area) in cont.items():
-        reg.append(dict(regra=f"flag própria da classe {tier}", campo=campo, n_pecas=n,
-                        area_ha=area))
-    grupos = vc.grupos_de_imputacao(sub)
-    for nome, sel, campos in grupos:
-        df = vc.imputar_mais_proximo(sub, sel, campos, ver)
+        reg.append(dict(regra=f"token próprio da classe {tier}", campo=campo, n_pecas=n, area_ha=area))
+    for nome, sel, campo in vc.grupos_de_imputacao(sub):
+        df = vc.imputar_mais_proximo(sub, sel, [campo], ver)
         reg += [dict(regra=nome, **r) for r in df.to_dict("records")]
-    df = vc.imputar_mais_proximo(sub, vc.selecao_uc_sem_esfera(sub), vc.UC_ESFERAS, ver)
-    reg += [dict(regra="UC sem esfera", **r) for r in df.to_dict("records")]
+    # UCs (classe 7): todos os nomes; APA/RPPN/UC coerentes com os nomes
+    tier = vc._tier(sub)
+    alvos, ids, tab = vc.carregar_rotulos("UC", bbox)
+    sub = vc.rotular(sub, tier == 7, alvos, ids)
+    tier = vc._tier(sub)
+    sub, n, ha, d = vc.rotular_vazios_mais_proximo(sub, tier == 7, alvos, ids)
+    if n:
+        reg.append(dict(regra="classe 7 sem UC (UC mais próxima)", campo="UC_Nome", n_pecas=n, area_ha=ha, dist_max_m=d))
+    t = vc.textos_uc(tab, sub["_lab"].tolist()) if len(tab) else [("", "", "", False, False, False)] * len(sub)
+    sub["UC_Nome"], sub["UC_Manejo"], sub["UC_Esfera"] = [x[0] for x in t], [x[1] for x in t], [x[2] for x in t]
+    m7 = tier == 7
+    for k, campo, valor in ((3, "APA", "APA"), (4, "RPPN", "RPPN"), (5, "_UC_outras", "UC")):
+        sel = m7 & np.array([x[k] for x in t])
+        vc._marcar(sub, sel, campo, valor)
+    # TIs (classe 6): todos os nomes
+    alvos, ids, tab = vc.carregar_rotulos("TI", bbox)
+    sub = vc.rotular(sub.drop(columns="_lab"), tier == 6, alvos, ids)
+    tier = vc._tier(sub)
+    sub, n, ha, d = vc.rotular_vazios_mais_proximo(sub, tier == 6, alvos, ids)
+    if n:
+        reg.append(dict(regra="classe 6 sem TI (TI mais próxima)", campo="TI_Nome", n_pecas=n, area_ha=ha, dist_max_m=d))
+    sub["TI_Nome"] = vc.textos_ti(tab, sub["_lab"].tolist()) if len(tab) else ""
+    sub = sub.drop(columns="_lab")
     if reg:
-        rel(f"{pref}matriz: " + "; ".join(f"{r['regra']} -> {r['campo']} ({r['n_pecas']})"
-                                          for r in reg))
+        rel(f"{pref}matriz: " + "; ".join(f"{r['regra']} -> {r['campo']} ({r['n_pecas']})" for r in reg))
     return sub, reg
 
 
@@ -126,8 +144,7 @@ def processar(ver, uf, bloco_km, sobrescrever):
     if base.empty:
         print("  sem feições para esta UF")
         return
-    area_ent = (base.assign(a=base.area / 1e4)
-                .groupby(["hierarquia_planaveg", "categoria"])["a"].sum()
+    area_ent = (base.assign(a=base.area / 1e4).groupby(["tier", "categoria"])["a"].sum()
                 .rename("area_entrada_albers_ha"))
     rel(f"Total lido: {len(base):,} peças, {area_ent.sum():,.1f} ha (Albers)")
 
@@ -155,7 +172,7 @@ def processar(ver, uf, bloco_km, sobrescrever):
             n_flag = int((sub[f["campo"]] != "").sum())
             rel(f"{pref}{f['campo']}: {len(mascara):,} polígonos na janela, "
                 f"{n_flag:,} peças marcadas, {len(sub):,} peças")
-        sub, reg = aplicar_matriz(sub, ver, pref, rel)
+        sub, reg = aplicar_matriz(sub, ver, bbox, pref, rel)
         imputacoes += reg
         resultado.append(sub)
 
@@ -163,18 +180,15 @@ def processar(ver, uf, bloco_km, sobrescrever):
     res = gpd.GeoDataFrame(res, geometry="geometry", crs=vc.ALBERS)
     area_m2 = res.area
     sliver = area_m2 < vc.MIN_AREA_M2
-    area_sliver = (res[sliver].assign(a=area_m2[sliver] / 1e4)
-                   .groupby(["hierarquia_planaveg", "categoria"])["a"].sum()
+    area_sliver = (res[sliver].assign(a=area_m2[sliver] / 1e4).groupby(["tier", "categoria"])["a"].sum()
                    .rename("area_slivers_ha"))
     rel(f"slivers descartados: {int(sliver.sum()):,} peças, {area_sliver.sum():.4f} ha")
-    res = vc.derivar_campos(res[~sliver].copy())
-
-    for c in vc.CHAVES_DISSOLVE:
-        if c != "tier":
-            res[c] = res[c].fillna("").astype(str)
+    res = vc.derivar_saida(res[~sliver].copy())
+    res = res[[c for c in vc.COLUNAS_SAIDA if c != "Area_ha"] + ["geometry"]]
+    for c in vc.CAMPOS_TEXTO:
+        res[c] = res[c].fillna("").astype(str)
     res = res.dissolve(by=vc.CHAVES_DISSOLVE, as_index=False, dropna=False)
     res["Area_ha"] = res.area / 1e4
-    res["computo"] = np.nan  # preenchido na etapa 4 (soma nacional por classe)
     res = res[vc.COLUNAS_SAIDA + ["geometry"]]
     rel(f"dissolvido: {len(res):,} feições, {res['Area_ha'].sum():,.1f} ha")
 
