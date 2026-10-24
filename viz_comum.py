@@ -137,6 +137,12 @@ ROTULOS = {
                campos=["terrai_cod", "terrai_nom", "fase_ti"]),
 }
 SEP = "; "
+# Nomes das TIs corrigidos pelo usuário (24/10/2026): o Terras_Indigenas_FUNAI20260507.gpkg tem a acentuação corrompida em
+# ~190 nomes (e 3 vazios). A tabela dados/TI_nomes_corrigidos_FUNAI20260507.csv (terrai_cod -> terrai_nom) substitui o nome
+# do arquivo para esses códigos.
+_TI_CORR = Path(__file__).resolve().parent / "dados" / "TI_nomes_corrigidos_FUNAI20260507.csv"
+TI_NOMES_CORRIGIDOS = ({int(k): str(v).strip() for k, v in pd.read_csv(_TI_CORR, sep=";", encoding="utf-8-sig")
+                        [["terrai_cod", "terrai_nom"]].itertuples(index=False)} if _TI_CORR.exists() else {})
 
 # ----------------------------------------------------------------------------
 # Textos (planilha de mapeamento, com a ortografia corrigida em 23/10/2026)
@@ -702,7 +708,14 @@ def textos_ti(tab, labs):
     out = []
     for t in labs:
         if t not in cache:
-            cache[t] = SEP.join(dict.fromkeys(tab.loc[list(t), "terrai_nom"].astype(str).str.strip().sort_values())) if t else ""
+            if t:
+                s = tab.loc[list(t)]
+                nomes = s["terrai_nom"].fillna("").astype(str).str.strip()
+                corr = pd.to_numeric(s["terrai_cod"], errors="coerce").map(TI_NOMES_CORRIGIDOS)
+                nomes = corr.where(corr.notna(), nomes)
+                cache[t] = SEP.join(dict.fromkeys(x for x in nomes.sort_values() if x))
+            else:
+                cache[t] = ""
         out.append(cache[t])
     return out
 
