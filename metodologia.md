@@ -32,7 +32,7 @@ Problemas encontrados no exemplo e **não replicados** em 2026:
 ## 3. Decisões aprovadas
 
 1. **Entrada:** `Reporte_Final/Planaveg_2026_Total.gpkg`, camadas
-   `Reporte_Planaveg_Total_vs22q` e `_vs2224q` (605 feições cada, dissolvidas
+   `Reporte_Planaveg_Total_vs22q` e `_vs2224q` (605 feições cada na v1.x; 604 no cômputo v1.2.0; dissolvidas
    por hierarquia × bioma × UF × categoria). Mantêm-se hierarquia, tier e
    categoria de 2026.
 2. **Fragmentação:** UF (campo do cômputo, inclui `FORA`), município
@@ -155,3 +155,69 @@ Por UF e versão:
 | VS em RL - Analisados | 639.238,7 | 658.855,2 |
 | VS em RL - Não Analisados | 2.527.946,9 | 2.626.897,4 |
 | **Total** | **8.588.736,1** | **8.803.112,7** |
+
+## 8. Esquema v2.0.0 (23 e 24/10/2026)
+
+As seções 3 a 7 descrevem o esquema v1.x (flags de componente). Desde a v2.0.0 a visualização segue a planilha
+`Planaveg_2026_total_VS2224_mapeamento_atributos_visualizacao.xlsx` e as respostas de 23/10/2026
+(`Instrucoes_Visualizacao.docx`), sobre o cômputo v1.2.0 (sem os embargos PANGIA; FUNBIO na classe 4).
+
+### 8.1 Decisões
+
+1. **Flags do próprio tier:** `CAR` só nos tiers 3, 9, 10 e 11; `PROJ` só nos 1, 2, 4 e 5; `UC` só no 7; `TI` só no 6;
+   `Manguezal` só no 8. `APA`, `RPPN`, `AS` (era `AS_`) e `QL` continuam marcando a sobreposição em qualquer tier.
+2. **Sobreposicao** mantém a regra anterior (sobreposição em qualquer tier), com os mesmos tokens.
+3. **Campos novos:** `Nome_Abreviado`, `Nome_Detalhado`, `CAR_Condicao` (era `categoria`), `PROJ_Categoria`, `UC_Nome`,
+   `UC_Manejo`, `UC_Esfera` e `TI_Nome`, cada um só nos tiers indicados.
+4. **Eliminados:** `computo`, `categoria`, `CAR_Habilitado/Analisado/Nao_Analisado`, `CAR_regularizacao`,
+   `APP/RL/AUR_<categoria>`, `Licenciamento_Ambiental`, `Reparacao_Danos`, `Area_Embargada`, `Outras_Areas`, `MonitoRAD`,
+   `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR`, `UC_federal`, `UC_estadual`, `UC_municipal`.
+5. **Hierarquia:** nomes novos; no tier 4, um nome por origem do projeto (ICMBio GEF Terrestre, ICMBio Restauração
+   Ecológica, FUNBIO), a partir dos polígonos líquidos da classe 4 (`P2_OUTROS_PROJETOS_<versão>`, campo `fonte`).
+6. **Tier 1:** `Nome_Abreviado`, `Nome_Detalhado` e `PROJ_Categoria` pela categoria do projeto Recooperar (licenciamento,
+   reparação, embargo, outras), a partir dos polígonos líquidos da classe 1 (`P2_RECOOPERAR`). Tier 2 (MonitoRAD): os mesmos
+   nomes do embargo do tier 1. Tiers 4 e 5: "Outros Projetos" e `PROJ_Categoria` = Outras_Áreas.
+7. **UC_Nome e TI_Nome:** todas as UCs (CNUC, só `limite = 'uc'`) ou TIs (FUNAI, as 4 fases do cômputo) que contêm o trecho,
+   separadas por "; "; o trecho é dividido onde o conjunto de UCs/TIs muda. `UC_Manejo` e `UC_Esfera` listam os valores
+   distintos na mesma ordem dos nomes.
+8. **Grafia:** textos da planilha com a ortografia corrigida ("Permanente", "seguinte", "regularização", "Lei nº");
+   `PROJ_Categoria` acentuado (Reparação_Danos, Área_Embargada, Outras_Áreas).
+9. **Nomes de TI:** o arquivo da FUNAI de 07/05/2026 tem a acentuação corrompida em cerca de 190 nomes e 3 nomes vazios;
+   a tabela `dados/TI_nomes_corrigidos_FUNAI20260507.csv` (revisada pelo usuário em 24/10/2026) substitui esses nomes
+   pelo `terrai_cod`.
+
+### 8.2 Algoritmo (mudanças no script 2)
+
+- As fontes do identity passaram a ser campos internos (prefixo `_`): `_CAR` (CAR dissolvido das três categorias e CAR em
+  regularização), `_PROJ` (Recooperar, MonitoRAD, ICMBio, FUNBIO e ORR), `_rec_cat` (categoria do Recooperar), `_t4_fonte`
+  (origem do tier 4), `_MANG`, `_UC_outras` e `_TI`; servem à `Sobreposicao` e às colunas de saída e não são gravados.
+  Saíram as fontes APP/RL/AUR por categoria, as mais pesadas: o Brasil roda em cerca de 4 h (antes, 10 h ou mais).
+- Rótulos individuais (`rotular`): para as peças do tier 7 (e do 6), índice espacial com as partes de cada UC (TI); peças
+  cobertas recebem os ids diretamente, as demais são divididas pela sobreposição com cada UC parcial. Peças de borda sem
+  UC/TI recebem a mais próxima.
+- No tier 7, `APA`, `RPPN` e o token UC são marcados também pelos rótulos, para ficarem coerentes com `UC_Nome`.
+
+### 8.3 Validação (script 3)
+
+Matriz M1 a M8 (ver README), conservação de área por tier e categoria do CAR, Albers x geodésica e geometrias.
+Rodada nacional: zero violações em todas as regras, conservação máxima de 0,001 ha, slivers de 13,7 ha (vs22q) e
+14,0 ha (vs2224q), Albers x geodésica entre -0,015% e +0,004%.
+
+### 8.4 Totais por classe (ha, cômputo v1.2.0)
+
+| Tier | Classe | vs22q | vs2224q |
+|---:|---|---:|---:|
+| 1 | Projetos do Programa Recooperar | 107.092,9 | 107.092,9 |
+| 2 | Projetos do Programa MonitoRAD | 286.250,0 | 286.250,0 |
+| 3 | Projetos de Regularização Ambiental em Imóvel Rural - CAR | 33.519,3 | 33.519,3 |
+| 4 | Outros Projetos ICMBio_GEF Terrestre | 4.588,5 | 4.588,5 |
+| 4 | Outros Projetos ICMBio_Restauração Ecológica | 32.707,1 | 32.707,1 |
+| 4 | Outros Projetos FUNBIO | 10.135,8 | 10.135,8 |
+| 5 | Projetos do Observatório da Restauração | 163.651,9 | 163.651,9 |
+| 6 | Vegetação Secundária em Territórios Indígenas | 953.415,1 | 991.600,7 |
+| 7 | Vegetação Secundária em Unidades de Conservação | 1.361.981,0 | 1.365.439,0 |
+| 8 | Vegetação Secundária em Área de Manguezais | 16.436,2 | 16.563,7 |
+| 9 | APP - Habilitados / Analisados / Não Analisados | 340.416,0 / 141.882,6 / 743.520,8 | 352.582,4 / 143.509,6 / 750.450,6 |
+| 10 | AUR - Habilitados / Analisados / Não Analisados | 16.372,5 / 5.706,8 / 35.316,4 | 17.535,4 / 6.171,8 / 36.504,3 |
+| 11 | RL - Habilitados / Analisados / Não Analisados | 1.173.043,1 / 644.235,5 / 2.539.767,5 | 1.213.160,0 / 663.388,7 / 2.639.424,8 |
+| | **Total** | **8.610.039,0** | **8.834.276,3** |

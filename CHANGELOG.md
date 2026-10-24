@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.0.0] - 2026-10-24
+Novo esquema de atributos (planilha "Planaveg_2026_total_VS2224_mapeamento_atributos_visualizacao" e respostas de
+23/10/2026), sobre o cômputo v1.2.0 (sem os embargos PANGIA, com a FUNBIO na classe 4).
+### Adicionado
+- `Nome_Abreviado`, `Nome_Detalhado`, `CAR_Condicao`, `PROJ_Categoria`, `UC_Nome`, `UC_Manejo`, `UC_Esfera` e `TI_Nome`.
+- `UC_Nome` / `TI_Nome` com todas as UCs / TIs que contêm cada trecho ("; "), por divisão das peças (`rotular`).
+- Tier 4 com a origem na hierarquia (ICMBio GEF Terrestre, ICMBio Restauração Ecológica, FUNBIO).
+- `dados/TI_nomes_corrigidos_FUNAI20260507.csv`: 194 nomes de TI corrigidos (acentuação corrompida e nomes vazios no
+  arquivo da FUNAI).
+- Matriz de preenchimento M1 a M8 do esquema novo (`3_validar.py`).
+### Alterado
+- Flags do próprio tier: `CAR` (3, 9-11), `PROJ` (1, 2, 4, 5), `UC` (7), `TI` (6), `Manguezal` (8); `Sobreposicao`
+  continua pela sobreposição em qualquer tier. `AS_` renomeado `AS`.
+- Nomes da hierarquia conforme a planilha, com a ortografia corrigida.
+- UCs lidas só com `limite = 'uc'` (sem zona de amortecimento), como no cômputo.
+- `4_consolidar_brasil.py` grava a área nacional por classe em `_logs/4_area_por_classe_<versão>.csv`.
+### Removido
+- `computo`, `categoria` e as flags de componente (CAR por situação, APP/RL/AUR por categoria, Recooperar por categoria,
+  MonitoRAD, Embargo_PANGIA, GEF_Terrestre, Restauracao_Ecologica, ORR, esferas de UC).
+
 ## [1.2.0] - 2026-10-21
 ### Adicionado
 - Subcategoria de PROJ `MonitoRAD` (IBAMA, classe 2 do cômputo v1.0.0), lida de

@@ -16,61 +16,68 @@ Este repositório é a última etapa da cadeia de processamento do PLANAVEG 2026
 O modelo de atributos é o exemplo do Espírito Santo gerado sobre o cômputo 2025
 (`Planaveg_2025_Categorias_Fundiarias/Planaveg_Categorias_Visualizacao.gpkg`),
 adaptado às camadas novas ou alteradas de 2026. A metodologia completa está em
-[docs/metodologia.md](docs/metodologia.md).
+[metodologia.md](metodologia.md).
 
-## Produto
+## Produto (v2.0.0, outubro/2026)
 
-`GEOPACKAGE/Computo_Planaveg_2026/Visualizacao/Planaveg_2026_Categorias_Visualizacao.gpkg`
+`GEOPACKAGE/Computo_Planaveg_2026/Visualizacao/Planaveg_2026_Categorias_Visualizacao.gpkg`, sobre o cômputo
+v1.2.0 (sem os embargos PANGIA, com a FUNBIO na classe 4):
 
-| Camada | Versão da vegetação secundária | Área total |
-|---|---|---|
-| `Planaveg_2026_Visualizacao_vs22q` | VS 2022 qualificada | 8.588.736 ha |
-| `Planaveg_2026_Visualizacao_vs2224q` | VS 2022-2024 qualificada | 8.803.113 ha |
+| Camada | Versão da vegetação secundária | Feições | Área total |
+|---|---|---:|---:|
+| `Planaveg_2026_Visualizacao_vs22q` | VS 2022 qualificada | 50.361 | 8.610.039 ha |
+| `Planaveg_2026_Visualizacao_vs2224q` | VS 2022-2024 qualificada | 50.515 | 8.834.276 ha |
 
-Cada feição é um fragmento do cômputo com uma combinação única de classe,
-localização e flags. Sistema de referência: Albers IBGE / SIRGAS 2000 (o mesmo do
-exemplo 2025), geometria 2D.
+Cada feição é um fragmento do cômputo com uma combinação única de classe, localização e atributos.
+Sistema de referência: Albers IBGE / SIRGAS 2000, geometria 2D. O esquema segue a planilha
+`Planaveg_2026_total_VS2224_mapeamento_atributos_visualizacao.xlsx` e as respostas de 23/10/2026
+(detalhes em [metodologia.md](metodologia.md), seção 8).
 
 ### Atributos
 
-| Grupo | Campos |
-|---|---|
-| Classe do cômputo | `hierarquia_planaveg`, `tier`, `categoria`, `computo` (total nacional da classe, ha), `Area_ha` (área do fragmento, ha) |
-| Localização | `UF`, `Bioma`, `Municipio`, `cod_municipio`, `Bacia` (micro RH), `Bacia_meso`, `Regiao_Hidrografica` (macro RH) |
-| CAR | `CAR` (tema), `CAR_Habilitado`, `CAR_Analisado`, `CAR_Nao_Analisado`, `CAR_regularizacao` (situação) |
-| APP / RL / AUR | `APP_Habilitado`, `APP_Analisado`, `APP_Nao_Analisado`, `RL_*`, `AUR_*` (mesmas três categorias) |
-| Projetos | `PROJ` (tema), `Licenciamento_Ambiental`, `Reparacao_Danos`, `Area_Embargada`, `Outras_Areas`, `MonitoRAD`, `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR` (subcategorias) |
-| Manguezal | `Manguezal` (tema isolado, Pró-Manguezal) |
-| Unidades de conservação | `APA`, `RPPN` (subcategorias e detalhe), `UC` (tema), `UC_federal`, `UC_estadual`, `UC_municipal` (esfera) |
-| Territórios | `TI`, `AS_`, `QL` |
-| Síntese | `Sobreposicao` (concatenação de PROJ, CAR, APA, RPPN, UC, MANG, TI, AS, QL; o token UC só aparece para UCs que não são APA/RPPN) |
+| Campo | Conteúdo | Preenchido em |
+|---|---|---|
+| `hierarquia_planaveg` | nome da classe (ex.: "Projetos do Programa Recooperar"); na classe 4, um nome por origem: "Outros Projetos ICMBio_GEF Terrestre", "Outros Projetos ICMBio_Restauração Ecológica", "Outros Projetos FUNBIO" | todas |
+| `tier` | ordem da classe na hierarquia (1 a 11) | todas |
+| `Nome_Abreviado`, `Nome_Detalhado` | nome curto e texto de tool tip da classe; na classe 1, pela categoria do projeto Recooperar | todas |
+| `Area_ha` | área do fragmento (Albers, ha) | todas |
+| `UF`, `Bioma`, `Municipio`, `cod_municipio`, `Bacia`, `Bacia_meso`, `Regiao_Hidrografica` | localização (UF e bioma do cômputo; município IBGE 2020; micro, meso e macro região hidrográfica) | todas |
+| `CAR`, `CAR_Condicao` | "CAR" e a condição do imóvel (texto da planilha) | tiers 3, 9, 10, 11 |
+| `PROJ`, `PROJ_Categoria` | "PROJ" e Licenciamento_Ambiental, Reparação_Danos, Área_Embargada ou Outras_Áreas (tier 1 pela categoria do Recooperar; tier 2 Área_Embargada; tiers 4 e 5 Outras_Áreas) | tiers 1, 2, 4, 5 |
+| `Manguezal` | "Pró-Manguezal" | tier 8 |
+| `APA`, `RPPN` | sobreposição com APA / RPPN do CNUC | qualquer tier |
+| `UC`, `UC_Nome`, `UC_Manejo`, `UC_Esfera` | "UC" e, de **todas** as UCs que contêm o trecho, separados por "; ": nome, manejo (Proteção_Integral / Uso_Sustentável) e esfera (UC_Federal / UC_Estadual / UC_Municipal), na ordem: proteção integral, fora da APA, federal > estadual > municipal, mais antiga | tier 7 |
+| `TI`, `TI_Nome` | "TI" e o nome de todas as TIs que contêm o trecho ("; ") | tier 6 |
+| `AS`, `QL` | sobreposição com assentamento / território quilombola do INCRA | qualquer tier |
+| `Sobreposicao` | concatenação de PROJ, CAR, APA, RPPN, UC, MANG, TI, AS, QL pela sobreposição em **qualquer** tier (o token UC só para UCs que não são APA/RPPN) | todas |
 
-Cada flag contém o rótulo (ex.: `"TI"`, `"Habilitado"`, `"Federal"`) quando o
-fragmento se sobrepõe à fonte, ou texto vazio quando não se sobrepõe. Exemplos de
-filtro: `"Sobreposicao" = 'PROJCAR'`, `"UF" = 'MT' AND "TI" <> ''`,
-`"APP_Nao_Analisado" <> '' AND "Bacia_meso" = '...'`.
+Os campos de cada tier ficam vazios nos demais (por exemplo, uma APP dentro de uma UC tem `UC` vazio, mas
+`Sobreposicao` contém UC ou APA). Exemplos de filtro: `"UC_Nome" LIKE '%PARQUE NACIONAL DO ITATIAIA%'`,
+`"TI_Nome" LIKE '%Évare I%'`, `"PROJ_Categoria" = 'Área_Embargada'`, `"Sobreposicao" LIKE '%TI%' AND "tier" = 11`.
 
-### Matriz de preenchimento
+Os nomes de TI vêm do `Terras_Indigenas_FUNAI20260507.gpkg`, que tem a acentuação corrompida em cerca de 190 nomes
+(e 3 vazios); esses nomes são substituídos pela tabela corrigida `dados/TI_nomes_corrigidos_FUNAI20260507.csv`
+(por `terrai_cod`, 194 TIs, revisada pelo usuário em 24/10/2026).
 
-Regras aplicadas na etapa 2 e conferidas na etapa 3 (`_logs/3_matriz_*.csv`; meta: zero
-violações em todas):
+### Matriz de preenchimento (v2.0.0)
+
+Conferida na etapa 3 (`_logs/3_matriz_*.csv`; meta: zero violações em todas):
 
 | Regra | Conteúdo |
 |---|---|
-| M1 | Hierarquia e localização sempre preenchidas; município e bacia vazios (litoral, `FORA`) recebem o polígono mais próximo |
-| M2 | `categoria` preenchida só nas classes do CAR (APP, AUR, RL) |
-| M3 | Toda peça tem pelo menos um tema: `CAR`, `PROJ`, `UC`, `TI` ou `Manguezal` |
-| M4 | `CAR` exige situação: `CAR_Habilitado`, `CAR_Analisado`, `CAR_Nao_Analisado` ou `CAR_regularizacao` |
-| M5 | `APP/RL/AUR_<situação>` implica `CAR_<situação>` (a sobreposição real de situações do SICAR é mantida) |
-| M6 | `PROJ` exige subcategoria (Recooperar, `MonitoRAD`, `Embargo_PANGIA`, `GEF_Terrestre`, `Restauracao_Ecologica`, `ORR`) |
-| M7 | `UC` exige esfera; `APA` e `RPPN` implicam `UC` |
-| M8 | Flags próprias da classe: 1 Recooperar; 2 `MonitoRAD`; 3 `CAR_regularizacao`; 4 PANGIA/GEF/Restauração; 5 `ORR`; 6 `TI`; 7 `UC` + esfera; 8 `Manguezal`; 9-11 `<tema>_<situação>` + `CAR_<situação>` |
-| M9 | `Sobreposicao` sempre preenchida |
+| M1 | Hierarquia, nomes e localização sempre preenchidos; município e bacia vazios (litoral, `FORA`) recebem o polígono mais próximo |
+| M2 | `CAR` e `CAR_Condicao` preenchidos nos tiers 3, 9, 10 e 11 e vazios nos demais |
+| M3 | `PROJ` e `PROJ_Categoria` preenchidos nos tiers 1, 2, 4 e 5 e vazios nos demais |
+| M4 | `UC`, `UC_Nome`, `UC_Manejo` e `UC_Esfera` preenchidos no tier 7 e vazios nos demais |
+| M5 | `TI` e `TI_Nome` preenchidos no tier 6 e vazios nos demais |
+| M6 | `Manguezal` preenchido no tier 8 e vazio nos demais |
+| M7 | Textos coerentes com o tier (hierarquia, nomes, `CAR_Condicao`, `PROJ_Categoria` na lista da planilha) |
+| M8 | `Sobreposicao` preenchida e com o token do próprio tier (PROJ, CAR, UC/APA/RPPN, TI, MANG) |
 
-Quando a peça está numa classe mas escapou do identity (borda, diferença de precisão), a flag
-própria é marcada pela classe. Onde a subcategoria é ambígua (classes 1, 4 e 7, e a esfera da
-UC) vale a fonte mais próxima. Tudo o que foi preenchido assim fica em
-`_logs/2_imputacoes_<versão>_<UF>.csv`, com número de peças, área e distância máxima.
+Quando a peça está numa classe mas escapou do identity na borda (diferença de precisão), o token próprio é
+garantido pela classe; a categoria do Recooperar (tier 1), a origem do tier 4 e o nome da UC (tier 7) ou TI (tier 6)
+vêm da fonte mais próxima. Tudo isso fica em `_logs/2_imputacoes_<versão>_<UF>.csv` (peças, área e distância máxima;
+no Brasil, cerca de 500 ha nas UCs e 50 ha nas TIs, a menos de 16 m).
 
 ## Dados: restaurar o backup
 
@@ -130,8 +137,9 @@ visualizacao_categoria-fundiaria/
 ├── 1_checar_fontes.py                    # confere arquivos, camadas, filtros e contagens
 ├── 2_fragmentar_e_atribuir.py            # processamento por UF e versão da VS
 ├── 3_validar.py                          # validação por UF (área, geometria, coerência)
-├── 4_consolidar_brasil.py                # junta as UFs e preenche o computo nacional
-├── docs/metodologia.md
+├── 4_consolidar_brasil.py                # junta as UFs (área nacional por classe no log 4_area_por_classe_*.csv)
+├── dados/TI_nomes_corrigidos_FUNAI20260507.csv   # nomes de TI corrigidos (terrai_cod -> terrai_nom)
+├── metodologia.md
 ├── CHANGELOG.md
 └── README.md
 ```
@@ -143,13 +151,11 @@ python 1_checar_fontes.py                           # deve terminar com "0 probl
 python 2_fragmentar_e_atribuir.py --uf ES           # teste numa UF pequena
 python 3_validar.py --uf ES
 
-# Brasil (UFs grandes em blocos de 200 km)
-python 2_fragmentar_e_atribuir.py --uf MT PA MG BA --versao vs22q --bloco-km 200
-python 2_fragmentar_e_atribuir.py --todas --versao vs22q
-python 2_fragmentar_e_atribuir.py --uf MT PA MG BA --versao vs2224q --bloco-km 200
-python 2_fragmentar_e_atribuir.py --todas --versao vs2224q
+# Brasil: MT e PA em blocos de 200 km (~1h30), demais UFs (~2h45), validação e consolidação
+python 2_fragmentar_e_atribuir.py --uf MT PA --bloco-km 200
+python 2_fragmentar_e_atribuir.py --uf AC AL AM AP BA CE DF ES FORA GO MA MG MS PB PE PI PR RJ RN RO RR RS SC SE SP TO
 python 3_validar.py --todas
-python 4_consolidar_brasil.py
+python 4_consolidar_brasil.py          # recusa se o Brasil já existir: renomeie o arquivo anterior antes
 ```
 
 Opções do script 2:
@@ -165,28 +171,29 @@ Saídas intermediárias:
 
 - `Visualizacao/_por_uf/Visualizacao_<versao>_<UF>.gpkg`: uma UF por arquivo.
 - `Visualizacao/_logs/`: checagem das fontes (`1_`), áreas de entrada e slivers
-  por UF (`2_`), validação e tabela classe × flag (`3_`), computo nacional (`4_`).
+  por UF e imputações (`2_`), validação, tabela classe × flag e matriz (`3_`), área nacional por classe (`4_`).
 
-## Validação (rodada nacional, outubro/2026)
+## Validação (rodada nacional v2.0.0, 23 e 24/10/2026)
 
-28 UFs (27 + `FORA`) nas duas versões, sem falhas.
+28 UFs (27 + `FORA`) nas duas versões, sem falhas; matriz M1 a M8 com zero violações.
 
 | Teste | Resultado |
 |---|---|
 | Conservação de área por classe (entrada = saída + slivers) | diferença máxima de 0,001 ha |
-| Slivers descartados (< 1 m²) | ~14 ha no Brasil |
-| Albers × geodésica GRS80 (classes > 1 ha) | entre −0,015% e +0,03%; total nacional +0,0004% |
+| Slivers descartados (< 1 m²) | 13,7 ha (vs22q) e 14,0 ha (vs2224q) |
+| Albers × geodésica GRS80 (classes > 1 ha por UF) | entre −0,015% e +0,004% |
 | Geometrias inválidas ou vazias | 0 |
-| Área de cada classe com a flag própria | ≥ 99,96% em todas as classes e UFs |
+| Área de cada classe sem violação da matriz | 100% em todas as classes e UFs |
 
 Nas UFs sem VS 2024 qualificada (AL, CE, ES, PB, PE, RJ, RN, RS, SC, SE) as duas
 versões são idênticas.
 
 ## Limitações conhecidas
 
-- As flags de APP, RL e AUR vêm dos recortes do cômputo, que só existem onde há
-  VS. Classes que entram pelo polígono inteiro (Recooperar, ORR) não recebem
-  essas flags fora da VS.
-- `CAR_regularizacao` só existe em AC, MT, PB, RJ e SP (cobertura da fonte).
+- O token CAR da `Sobreposicao` vem do CAR dissolvido por UF (Maio/2026) e do CAR em regularização; nos tiers 9 a 11
+  ele é garantido pela classe (cerca de 29 mil ha de APP/AUR/RL ficam fora do CAR dissolvido, por diferença entre as
+  bases do cruzamento e a dissolvida).
+- O CAR em regularização (tier 3) só existe em AC, MT, PB, RJ e SP (cobertura da fonte).
+- UC: só o limite da UC (`limite = 'uc'` no CNUC), sem a zona de amortecimento, como no cômputo.
 - A malha municipal é a do IBGE 2020; as bacias são a divisão hidrográfica
   nacional do IBGE e não reproduzem as bacias estaduais usadas no exemplo ES 2025.
